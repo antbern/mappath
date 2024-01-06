@@ -1,4 +1,5 @@
-use std::{error::Error, fmt::Display};
+use std::{collections::VecDeque, error::Error, fmt::Display};
+use anyhow::anyhow;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Cell {
@@ -39,7 +40,7 @@ impl<T: Display> Display for Map<T> {
             for cell in row {
                 write!(f, "{}", cell)?;
             }
-            writeln!(f)?;
+            write!(f, "\n")?;
         }
 
         Ok(())
@@ -111,7 +112,7 @@ fn main() {
             vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
-            vec![Invalid, Valid, Valid, Valid, Invalid, Invalid, Invalid],
+            vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
             vec![
                 Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
             ],
@@ -128,14 +129,16 @@ fn main() {
 
 fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dyn Error>> {
     // for keeping track of the cost up to the point and the point itself to visit
-    let mut visit_list: Vec<(usize, Point)> = Vec::new();
+    let mut visit_list: VecDeque<(usize, Point)> = VecDeque::new();
 
     // to keep track of where we have been
     let mut visited = Map::new_as(map, false);
 
-    visit_list.push((0, start));
+    visit_list.push_back((0, start));
 
-    while let Some((cost, p)) = visit_list.pop() {
+    let mut path_cost: Option<usize> = None;
+
+    while let Some((cost, p)) = visit_list.pop_front() {
         // we have a point to process, find the valid neighbors to visit next
 
         if visited.get(p) {
@@ -147,6 +150,7 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
         // if this is the goal, we are done! (and should probably do some back-tracking)
         if p == goal {
             println!("FOUND GOAL!: cost={}", cost);
+            path_cost = Some(cost);
             break;
         }
 
@@ -154,7 +158,7 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
             let c = map.get(point);
 
             if c == Cell::Valid && !visited.get(point) {
-                visit_list.push((cost + 1, point));
+                visit_list.push_back((cost + 1, point));
             }
         }
     }
@@ -162,5 +166,6 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
     //    println!("Exited without finding the goal!");
     //}
 
-    Ok(0)
+    println!("{}", visited);
+    path_cost.ok_or(anyhow!("").into())
 }
