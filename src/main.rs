@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use core::panic;
+use image::GenericImageView;
 use std::{
     cmp::Ordering,
     collections::BinaryHeap,
@@ -104,10 +105,36 @@ impl<T: Copy> Map<T> {
         }
     }
 }
+
+fn load_image() -> Result<Map<Cell>, Box<dyn Error>> {
+    let img = image::open("data/maze-03_6_threshold.png")?;
+
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+
+    let mut cells = vec![vec![Cell::Invalid; width as usize]; height as usize];
+
+    for row in 0..height {
+        for col in 0..width {
+            let p = img.get_pixel(col as u32, row as u32);
+
+            cells[row][col] = if p.0[0] < 128 {
+                Cell::Invalid
+            } else {
+                Cell::Valid
+            }
+        }
+    }
+
+    Ok(Map {
+        rows: height,
+        columns: width,
+        cells,
+    })
 }
 
 #[allow(unused_must_use)]
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     // TODO: load image, convert to "validity mask"
 
     // construct hard-coded for now
@@ -130,12 +157,15 @@ fn main() {
         ],
     };
 
+    let map = load_image()?;
+
     // implement brute force breadth-first search within the validity map
     println!("{}", map);
 
-    let res = find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 });
+    let res = find_path(&map, Point { row: 14, col: 0 }, Point { row: 44, col: 51 });
 
     dbg!(res);
+    Ok(())
 }
 
 #[derive(Eq)]
@@ -187,8 +217,8 @@ impl DerefMut for Visited {
 impl Display for Visited {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Some(item) => write!(f, "{:02} ", item.cost),
-            None => write!(f, "   "),
+            Some(item) => write!(f, "{:03} ", item.cost),
+            None => write!(f, "{:03} ", ""),
         }
     }
 }
