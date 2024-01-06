@@ -100,9 +100,10 @@ impl<T: Copy> Map<T> {
         Map {
             rows: other.rows,
             columns: other.columns,
-            cells: vec![vec![default_value; other.rows]; other.columns],
+            cells: vec![vec![default_value; other.columns]; other.rows],
         }
     }
+}
 }
 
 #[allow(unused_must_use)]
