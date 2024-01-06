@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use core::panic;
 use std::{
     cmp::Ordering,
     collections::BinaryHeap,
@@ -119,7 +120,7 @@ fn main() {
             ],
             vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Cost(11), Valid, Valid, Valid, Invalid],
+            vec![Invalid, Valid, Cost(2), Valid, Valid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
             vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
             vec![
@@ -140,6 +141,7 @@ fn main() {
 struct ToVisit {
     cost: usize,
     point: Point,
+    from: Option<Point>,
 }
 
 impl Ord for ToVisit {
@@ -161,9 +163,16 @@ impl PartialEq for ToVisit {
 }
 
 #[derive(Clone, Copy)]
-struct Visited(Option<usize>);
+struct VisitedItem {
+    cost: usize,
+    from: Option<Point>,
+}
+
+#[derive(Clone, Copy)]
+struct Visited(Option<VisitedItem>);
+
 impl Deref for Visited {
-    type Target = Option<usize>;
+    type Target = Option<VisitedItem>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -177,13 +186,19 @@ impl DerefMut for Visited {
 impl Display for Visited {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Some(cost) => write!(f, "{:02} ", cost),
+            Some(item) => write!(f, "{:02} ", item.cost),
             None => write!(f, "   "),
         }
     }
 }
 
-fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dyn Error>> {
+#[derive(Debug)]
+struct PathResult {
+    path: Vec<Point>,
+    total_cost: usize,
+}
+
+fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, Box<dyn Error>> {
     // for keeping track of the cost up to the point and the point itself to visit
     // always prioritize visiting the lowest-cost ones, hence use a binary heap as a priority queue
     let mut visit_list: BinaryHeap<ToVisit> = BinaryHeap::new();
@@ -194,9 +209,10 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
     visit_list.push(ToVisit {
         cost: 0,
         point: start,
+        from: None,
     });
 
-    let mut path_cost: Option<usize> = None;
+    let mut result: Option<PathResult> = None;
 
     while let Some(visit) = visit_list.pop() {
         // we have a point to process, find the valid neighbors to visit next
@@ -205,12 +221,47 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
             continue;
         }
 
-        *visited.get_mut(visit.point) = Visited(Some(visit.cost));
+        *visited.get_mut(visit.point) = Visited(Some(VisitedItem {
+            cost: visit.cost,
+            from: visit.from,
+        }));
 
-        // if this is the goal, we are done! (and should probably do some back-tracking)
+        // if this is the goal, we are done! (and should probably do some back-tracking to find the actual shortest path...)
         if visit.point == goal {
             println!("FOUND GOAL!: cost={}", visit.cost);
-            path_cost = Some(visit.cost);
+
+            // backtrack to find the total shortest path
+            let mut path: Vec<Point> = Vec::new();
+            path.push(goal);
+
+            let mut previous_visit = visited.get(goal);
+
+            loop {
+                previous_visit = match previous_visit {
+                    Visited(Some(VisitedItem {
+                        cost: _,
+                        from: None,
+                    })) => {
+                        // we found the starting point, we are done
+                        break;
+                    }
+                    Visited(Some(VisitedItem {
+                        cost: _,
+                        from: Some(from),
+                    })) => {
+                        path.push(from);
+                        visited.get(from)
+                    }
+                    Visited(None) => panic!("Backtracking lead to a Point that was never visited"),
+                }
+            }
+
+            path.reverse();
+
+            result = Some(PathResult {
+                path: path,
+                total_cost: visit.cost,
+            });
             break;
         }
 
@@ -223,11 +274,12 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dy
                 visit_list.push(ToVisit {
                     cost: visit.cost + move_cost,
                     point: point,
+                    from: Some(visit.point),
                 });
             }
         }
     }
 
     println!("{}", visited);
-    path_cost.ok_or(anyhow!("").into())
+    result.ok_or(anyhow!("").into())
 }
