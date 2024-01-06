@@ -1,10 +1,17 @@
-use std::{collections::VecDeque, error::Error, fmt::Display};
 use anyhow::anyhow;
+use std::{
+    cmp::Ordering,
+    collections::BinaryHeap,
+    error::Error,
+    fmt::{Debug, Display},
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Cell {
     Invalid,
     Valid,
+    Cost(usize),
 }
 
 impl Display for Cell {
@@ -15,6 +22,7 @@ impl Display for Cell {
             match self {
                 Cell::Invalid => "X",
                 Cell::Valid => " ",
+                Cell::Cost(_) => "$",
             }
         )
     }
@@ -96,6 +104,7 @@ impl<T: Copy> Map<T> {
     }
 }
 
+#[allow(unused_must_use)]
 fn main() {
     // TODO: load image, convert to "validity mask"
 
@@ -110,7 +119,7 @@ fn main() {
             ],
             vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
+            vec![Invalid, Valid, Cost(11), Valid, Valid, Valid, Invalid],
             vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
             vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
             vec![
@@ -127,44 +136,97 @@ fn main() {
     dbg!(res);
 }
 
+#[derive(Eq)]
+struct ToVisit {
+    cost: usize,
+    point: Point,
+}
+
+impl Ord for ToVisit {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cost.cmp(&other.cost).reverse() // reverse for BinaryHeap to be a min-heap
+    }
+}
+
+impl PartialOrd for ToVisit {
+    fn partial_cmp(&self, other: &ToVisit) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ToVisit {
+    fn eq(&self, other: &ToVisit) -> bool {
+        self.cost == other.cost
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Visited(Option<usize>);
+impl Deref for Visited {
+    type Target = Option<usize>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for Visited {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+impl Display for Visited {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(cost) => write!(f, "{:02} ", cost),
+            None => write!(f, "   "),
+        }
+    }
+}
+
 fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<usize, Box<dyn Error>> {
     // for keeping track of the cost up to the point and the point itself to visit
-    let mut visit_list: VecDeque<(usize, Point)> = VecDeque::new();
+    // always prioritize visiting the lowest-cost ones, hence use a binary heap as a priority queue
+    let mut visit_list: BinaryHeap<ToVisit> = BinaryHeap::new();
 
     // to keep track of where we have been
-    let mut visited = Map::new_as(map, false);
+    let mut visited: Map<Visited> = Map::new_as(map, Visited(None));
 
-    visit_list.push_back((0, start));
+    visit_list.push(ToVisit {
+        cost: 0,
+        point: start,
+    });
 
     let mut path_cost: Option<usize> = None;
 
-    while let Some((cost, p)) = visit_list.pop_front() {
+    while let Some(visit) = visit_list.pop() {
         // we have a point to process, find the valid neighbors to visit next
 
-        if visited.get(p) {
+        if visited.get(visit.point).is_some() {
             continue;
         }
 
-        *visited.get_mut(p) = true;
+        *visited.get_mut(visit.point) = Visited(Some(visit.cost));
 
         // if this is the goal, we are done! (and should probably do some back-tracking)
-        if p == goal {
-            println!("FOUND GOAL!: cost={}", cost);
-            path_cost = Some(cost);
+        if visit.point == goal {
+            println!("FOUND GOAL!: cost={}", visit.cost);
+            path_cost = Some(visit.cost);
             break;
         }
 
-        for point in map.neighbors_four(p) {
+        for point in map.neighbors_four(visit.point) {
             let c = map.get(point);
 
-            if c == Cell::Valid && !visited.get(point) {
-                visit_list.push_back((cost + 1, point));
+            if c != Cell::Invalid && !visited.get(point).is_some() {
+                let move_cost = if let Cell::Cost(c) = c { c } else { 1 };
+
+                visit_list.push(ToVisit {
+                    cost: visit.cost + move_cost,
+                    point: point,
+                });
             }
         }
     }
-    //else {
-    //    println!("Exited without finding the goal!");
-    //}
 
     println!("{}", visited);
     path_cost.ok_or(anyhow!("").into())
