@@ -30,10 +30,62 @@ impl Display for Cell {
     }
 }
 
-struct Map<T> {
+trait MapTrait {
+    /// The type that can be used to reference nodes in the map
+    type Reference: Copy;
+
+    /// Return an iterator over the neighbors of the provided node and the cost required to go there
+    fn neighbors_of(&self, node: Self::Reference)
+        -> impl Iterator<Item = (Self::Reference, usize)>;
+
+    /// Create a storage for values of type T
+    fn create_storage<T: Copy>(
+        &self,
+        default_value: T,
+    ) -> impl MapStorage<T, Reference = Self::Reference>;
+}
+
+trait MapStorage<T> {
+    type Reference: Copy;
+
+    fn get(&self, node: Self::Reference) -> T;
+    fn get_mut(&mut self, node: Self::Reference) -> &mut T;
+}
+
+/// A MapTrait implementation that uses a rectangular grid of cells
+struct Map {
     rows: usize,
     columns: usize,
-    cells: Vec<Vec<T>>,
+    cells: Vec<Vec<Cell>>,
+}
+
+/// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
+// TODO: change from vec of vec to one single vec -> better cache friendlyness!
+struct CellStorage<T>(Vec<Vec<T>>);
+
+impl<T: Copy> MapStorage<T> for CellStorage<T> {
+    type Reference = Point;
+
+    fn get(&self, node: Self::Reference) -> T {
+        self.0[node.row][node.col]
+    }
+
+    fn get_mut(&mut self, node: Self::Reference) -> &mut T {
+        &mut self.0[node.row][node.col]
+    }
+}
+
+impl<T: Display> Display for CellStorage<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in &self.0 {
+            for cell in row {
+                write!(f, "{}", cell)?;
+            }
+            write!(f, "\n")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -44,7 +96,7 @@ struct Point {
 
 impl Point {}
 
-impl<T: Display> Display for Map<T> {
+impl Display for Map {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.cells {
             for cell in row {
@@ -57,56 +109,76 @@ impl<T: Display> Display for Map<T> {
     }
 }
 
-impl<T: Copy> Map<T> {
-    fn get(&self, point: Point) -> T {
-        self.cells[point.row][point.col]
-    }
-    fn get_mut(&mut self, point: Point) -> &mut T {
-        &mut self.cells[point.row][point.col]
-    }
-    /// Returns the neighbouring points for the given point
-    /// Only valid points inside the map will be returned
-    fn neighbors_four(&self, point: Point) -> impl Iterator<Item = Point> {
+impl MapTrait for Map {
+    type Reference = Point;
+
+    fn neighbors_of(
+        &self,
+        node: Self::Reference,
+    ) -> impl Iterator<Item = (Self::Reference, usize)> {
         let mut points = Vec::with_capacity(4);
 
-        if point.row > 0 {
-            points.push(Point {
-                row: point.row - 1,
-                col: point.col,
-            });
-        }
-        if point.col > 0 {
-            points.push(Point {
-                col: point.col - 1,
-                row: point.row,
-            });
+        let c = self.cells[node.row][node.col];
+
+        if c == Cell::Invalid {
+            return points.into_iter();
         }
 
-        if point.row < self.rows - 1 {
-            points.push(Point {
-                row: point.row + 1,
-                col: point.col,
-            });
+        let move_cost = if let Cell::Cost(cost) = c { cost } else { 1 };
+
+        if node.row > 0 {
+            points.push((
+                Point {
+                    row: node.row - 1,
+                    col: node.col,
+                },
+                move_cost,
+            ));
         }
-        if point.col < self.columns - 1 {
-            points.push(Point {
-                col: point.col + 1,
-                row: point.row,
-            });
+        if node.col > 0 {
+            points.push((
+                Point {
+                    col: node.col - 1,
+                    row: node.row,
+                },
+                move_cost,
+            ));
         }
+
+        if node.row < self.rows - 1 {
+            points.push((
+                Point {
+                    row: node.row + 1,
+                    col: node.col,
+                },
+                move_cost,
+            ));
+        }
+        if node.col < self.columns - 1 {
+            points.push((
+                Point {
+                    col: node.col + 1,
+                    row: node.row,
+                },
+                move_cost,
+            ));
+        }
+
+        // filter to only keep valid cells
+        points.retain(|(p, _)| self.cells[p.row][p.col] != Cell::Invalid);
+
         points.into_iter()
     }
-    /// Create a new Map with the same dimensions as another map
-    fn new_as<S>(other: &Map<S>, default_value: T) -> Map<T> {
-        Map {
-            rows: other.rows,
-            columns: other.columns,
-            cells: vec![vec![default_value; other.columns]; other.rows],
-        }
+
+    fn create_storage<T: Copy>(
+        &self,
+        default_value: T,
+    ) -> impl MapStorage<T, Reference = Self::Reference> {
+        CellStorage(vec![vec![default_value; self.columns]; self.rows])
     }
 }
 
-fn load_image() -> Result<Map<Cell>, Box<dyn Error>> {
+fn load_image() -> Result<Map, Box<dyn Error>> {
     let img = image::open("data/maze-03_6_threshold.png")?;
 
     let width = img.width() as usize;
@@ -135,28 +207,6 @@ fn load_image() -> Result<Map<Cell>, Box<dyn Error>> {
 
 #[allow(unused_must_use)]
 fn main() -> Result<(), Box<dyn Error>> {
-    // TODO: load image, convert to "validity mask"
-
-    // construct hard-coded for now
-    use Cell::*;
-    let map: Map<Cell> = Map {
-        rows: 7,
-        columns: 7,
-        cells: vec![
-            vec![
-                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
-            ],
-            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Cost(2), Valid, Valid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
-            vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
-            vec![
-                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
-            ],
-        ],
-    };
-
     let map = load_image()?;
 
     // implement brute force breadth-first search within the validity map
@@ -169,54 +219,54 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[derive(Eq)]
-struct ToVisit {
+struct ToVisit<R: Eq> {
     cost: usize,
-    point: Point,
-    from: Option<Point>,
+    point: R,
+    from: Option<R>,
 }
 
-impl Ord for ToVisit {
+impl<R: Eq> Ord for ToVisit<R> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.cost.cmp(&other.cost).reverse() // reverse for BinaryHeap to be a min-heap
     }
 }
 
-impl PartialOrd for ToVisit {
-    fn partial_cmp(&self, other: &ToVisit) -> Option<Ordering> {
+impl<R: Eq> PartialOrd for ToVisit<R> {
+    fn partial_cmp(&self, other: &ToVisit<R>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for ToVisit {
-    fn eq(&self, other: &ToVisit) -> bool {
+impl<R: Eq> PartialEq for ToVisit<R> {
+    fn eq(&self, other: &ToVisit<R>) -> bool {
         self.cost == other.cost
     }
 }
 
 #[derive(Clone, Copy)]
-struct VisitedItem {
+struct VisitedItem<R> {
     cost: usize,
-    from: Option<Point>,
+    from: Option<R>,
 }
 
 #[derive(Clone, Copy)]
-struct Visited(Option<VisitedItem>);
+struct Visited<R>(Option<VisitedItem<R>>);
 
-impl Deref for Visited {
-    type Target = Option<VisitedItem>;
+impl<R> Deref for Visited<R> {
+    type Target = Option<VisitedItem<R>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl DerefMut for Visited {
+impl<R> DerefMut for Visited<R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
-impl Display for Visited {
+impl<R> Display for Visited<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
+        match &self.0 {
             Some(item) => write!(f, "{:03} ", item.cost),
             None => write!(f, "{:03} ", ""),
         }
@@ -224,18 +274,22 @@ impl Display for Visited {
 }
 
 #[derive(Debug, PartialEq)]
-struct PathResult {
-    path: Vec<Point>,
+struct PathResult<R> {
+    path: Vec<R>,
     total_cost: usize,
 }
 
-fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, Box<dyn Error>> {
+fn find_path<R: Eq + Copy, M: MapTrait<Reference = R>>(
+    map: &M,
+    start: R,
+    goal: R,
+) -> Result<PathResult<R>, Box<dyn Error>> {
     // for keeping track of the cost up to the point and the point itself to visit
     // always prioritize visiting the lowest-cost ones, hence use a binary heap as a priority queue
-    let mut visit_list: BinaryHeap<ToVisit> = BinaryHeap::new();
+    let mut visit_list: BinaryHeap<ToVisit<R>> = BinaryHeap::new();
 
     // to keep track of where we have been
-    let mut visited: Map<Visited> = Map::new_as(map, Visited(None));
+    let mut visited = map.create_storage(Visited(None));
 
     visit_list.push(ToVisit {
         cost: 0,
@@ -243,7 +297,7 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, B
         from: None,
     });
 
-    let mut result: Option<PathResult> = None;
+    let mut result: Option<PathResult<R>> = None;
 
     while let Some(visit) = visit_list.pop() {
         // we have a point to process, find the valid neighbors to visit next
@@ -262,7 +316,7 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, B
             println!("FOUND GOAL!: cost={}", visit.cost);
 
             // backtrack to find the total shortest path
-            let mut path: Vec<Point> = Vec::new();
+            let mut path: Vec<R> = Vec::new();
             path.push(goal);
 
             let mut previous_visit = visited.get(goal);
@@ -296,12 +350,8 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, B
             break;
         }
 
-        for point in map.neighbors_four(visit.point) {
-            let c = map.get(point);
-
-            if c != Cell::Invalid && !visited.get(point).is_some() {
-                let move_cost = if let Cell::Cost(c) = c { c } else { 1 };
-
+        for (point, move_cost) in map.neighbors_of(visit.point) {
+            if !visited.get(point).is_some() {
                 visit_list.push(ToVisit {
                     cost: visit.cost + move_cost,
                     point: point,
@@ -311,7 +361,7 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, B
         }
     }
 
-    println!("{}", visited);
+    // println!("{}", visited);
     result.ok_or(anyhow!("").into())
 }
 
@@ -320,7 +370,7 @@ mod test {
 
     use super::*;
 
-    fn create_basic_map() -> Map<Cell> {
+    fn create_basic_map() -> Map {
         use Cell::*;
         Map {
             rows: 7,
