@@ -223,7 +223,7 @@ impl Display for Visited {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct PathResult {
     path: Vec<Point>,
     total_cost: usize,
@@ -313,4 +313,76 @@ fn find_path(map: &Map<Cell>, start: Point, goal: Point) -> Result<PathResult, B
 
     println!("{}", visited);
     result.ok_or(anyhow!("").into())
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    fn create_basic_map() -> Map<Cell> {
+        use Cell::*;
+        Map {
+            rows: 7,
+            columns: 7,
+            cells: vec![
+                vec![
+                    Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
+                ],
+                vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
+                vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
+                vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
+                vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
+                vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
+                vec![
+                    Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
+                ],
+            ],
+        }
+    }
+
+    #[test]
+    fn test_basic_route() {
+        let map = create_basic_map();
+
+        // test the basic case
+        assert!(matches!(
+            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
+            Ok(PathResult { total_cost: 12, .. })
+        ));
+    }
+    #[test]
+    fn test_basic_no_route() {
+        let map = create_basic_map();
+
+        // no route to target
+        assert!(matches!(
+            find_path(&map, Point { row: 1, col: 1 }, Point { row: 0, col: 5 }),
+            Err(_)
+        ));
+    }
+
+    #[test]
+    fn test_basic_shortcut() {
+        let mut map = create_basic_map();
+
+        // create higher cost shortcut
+        map.cells[3][2] = Cell::Cost(2);
+        assert!(matches!(
+            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
+            Ok(PathResult { total_cost: 9, .. })
+        ));
+
+        map.cells[3][2] = Cell::Cost(4);
+        assert!(matches!(
+            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
+            Ok(PathResult { total_cost: 11, .. })
+        ));
+
+        map.cells[3][2] = Cell::Cost(10);
+        assert!(matches!(
+            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
+            Ok(PathResult { total_cost: 12, .. })
+        ));
+    }
 }
