@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use core::panic;
 use image::GenericImageView;
 use std::{
+    any::Any,
     cmp::Ordering,
     collections::BinaryHeap,
     error::Error,
@@ -30,26 +31,32 @@ impl Display for Cell {
     }
 }
 
+/// Supertrait that collects all the requirements on the NodeReference values
+/// Must be copy, comparable and not references (hence 'static)
+trait NodeReference: Copy + Eq + 'static {}
+
 trait MapTrait {
     /// The type that can be used to reference nodes in the map
-    type Reference: Copy;
+    type Reference: NodeReference;
 
     /// Return an iterator over the neighbors of the provided node and the cost required to go there
     fn neighbors_of(&self, node: Self::Reference)
         -> impl Iterator<Item = (Self::Reference, usize)>;
 
     /// Create a storage for values of type T
-    fn create_storage<T: Copy>(
+    fn create_storage<T: Copy + 'static>(
         &self,
         default_value: T,
     ) -> impl MapStorage<T, Reference = Self::Reference>;
 }
 
 trait MapStorage<T> {
-    type Reference: Copy;
+    type Reference: NodeReference;
 
     fn get(&self, node: Self::Reference) -> T;
     fn get_mut(&mut self, node: Self::Reference) -> &mut T;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// A MapTrait implementation that uses a rectangular grid of cells
@@ -61,9 +68,10 @@ struct Map {
 
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
 // TODO: change from vec of vec to one single vec -> better cache friendlyness!
+#[derive(Debug)]
 struct CellStorage<T>(Vec<Vec<T>>);
 
-impl<T: Copy> MapStorage<T> for CellStorage<T> {
+impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
     type Reference = Point;
 
     fn get(&self, node: Self::Reference) -> T {
@@ -72,6 +80,10 @@ impl<T: Copy> MapStorage<T> for CellStorage<T> {
 
     fn get_mut(&mut self, node: Self::Reference) -> &mut T {
         &mut self.0[node.row][node.col]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -94,7 +106,7 @@ struct Point {
     col: usize,
 }
 
-impl Point {}
+impl NodeReference for Point {}
 
 impl Display for Map {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -111,6 +123,7 @@ impl Display for Map {
 
 impl MapTrait for Map {
     type Reference = Point;
+    // type Storage = CellStorage;
 
     fn neighbors_of(
         &self,
@@ -170,7 +183,7 @@ impl MapTrait for Map {
         points.into_iter()
     }
 
-    fn create_storage<T: Copy>(
+    fn create_storage<T: Copy + 'static>(
         &self,
         default_value: T,
     ) -> impl MapStorage<T, Reference = Self::Reference> {
@@ -212,9 +225,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     // implement brute force breadth-first search within the validity map
     println!("{}", map);
 
-    let res = find_path(&map, Point { row: 14, col: 0 }, Point { row: 44, col: 51 });
+    let (res, visited) = find_path(&map, Point { row: 14, col: 0 }, Point { row: 44, col: 51 })?;
 
     dbg!(res);
+
+    // a bit hacky for now to get the visited storage back into the concrete type
+    // TODO: might help to have the reference type as generic argument to the map instead...
+    let visited = visited
+        .as_any()
+        .downcast_ref::<CellStorage<Visited<Point>>>()
+        .expect("Wasn't a CellStorage<Visited<Point>>!");
+
+    println!("{}", visited);
+
     Ok(())
 }
 
@@ -243,13 +266,13 @@ impl<R: Eq> PartialEq for ToVisit<R> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct VisitedItem<R> {
     cost: usize,
     from: Option<R>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Visited<R>(Option<VisitedItem<R>>);
 
 impl<R> Deref for Visited<R> {
@@ -279,11 +302,17 @@ struct PathResult<R> {
     total_cost: usize,
 }
 
-fn find_path<R: Eq + Copy, M: MapTrait<Reference = R>>(
-    map: &M,
+fn find_path<'a, R: NodeReference, M: MapTrait<Reference = R>>(
+    map: &'a M,
     start: R,
     goal: R,
-) -> Result<PathResult<R>, Box<dyn Error>> {
+) -> Result<
+    (
+        PathResult<R>,
+        impl MapStorage<Visited<R>, Reference = R> + 'a,
+    ),
+    Box<dyn Error>,
+> {
     // for keeping track of the cost up to the point and the point itself to visit
     // always prioritize visiting the lowest-cost ones, hence use a binary heap as a priority queue
     let mut visit_list: BinaryHeap<ToVisit<R>> = BinaryHeap::new();
@@ -362,7 +391,7 @@ fn find_path<R: Eq + Copy, M: MapTrait<Reference = R>>(
     }
 
     // println!("{}", visited);
-    result.ok_or(anyhow!("").into())
+    result.ok_or(anyhow!("").into()).map(|r| (r, visited))
 }
 
 #[cfg(test)]
@@ -398,7 +427,7 @@ mod test {
         // test the basic case
         assert!(matches!(
             find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok(PathResult { total_cost: 12, .. })
+            Ok((PathResult { total_cost: 12, .. }, _))
         ));
     }
     #[test]
@@ -420,19 +449,19 @@ mod test {
         map.cells[3][2] = Cell::Cost(2);
         assert!(matches!(
             find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok(PathResult { total_cost: 9, .. })
+            Ok((PathResult { total_cost: 9, .. }, _))
         ));
 
         map.cells[3][2] = Cell::Cost(4);
         assert!(matches!(
             find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok(PathResult { total_cost: 11, .. })
+            Ok((PathResult { total_cost: 11, .. }, _))
         ));
 
         map.cells[3][2] = Cell::Cost(10);
         assert!(matches!(
             find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok(PathResult { total_cost: 12, .. })
+            Ok((PathResult { total_cost: 12, .. }, _))
         ));
     }
 }
