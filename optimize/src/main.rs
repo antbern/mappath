@@ -123,7 +123,6 @@ impl Display for Map {
 
 impl MapTrait for Map {
     type Reference = Point;
-    // type Storage = CellStorage;
 
     fn neighbors_of(
         &self,
