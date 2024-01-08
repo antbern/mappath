@@ -1,8 +1,48 @@
 use core::f64;
+use std::{rc::Rc, sync::Mutex};
 
 use log::{debug, info};
 use wasm_bindgen::{prelude::*, Clamped};
-use web_sys::ImageData;
+use web_sys::{Document, HtmlElement, ImageData};
+
+fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
+    document: &Document,
+    id: &str,
+    mut callback: T,
+    state: &Rc<S>,
+) {
+    let state = state.clone();
+    let closure_btn_clone = Closure::<dyn FnMut()>::new(move || {
+        callback(&state);
+    });
+
+    document
+        .get_element_by_id(id)
+        .expect("should have btn-reset on the page")
+        .dyn_ref::<HtmlElement>()
+        .expect("#btn-reset be an `HtmlElement`")
+        .set_onclick(Some(closure_btn_clone.as_ref().unchecked_ref()));
+
+    // See comments https://rustwasm.github.io/wasm-bindgen/examples/closures.html
+    closure_btn_clone.forget();
+}
+
+#[derive(Debug)]
+struct State {
+    value: usize,
+}
+
+impl State {
+    fn on_reset(&mut self) {
+        debug!("reset");
+    }
+    fn on_step(&mut self) {
+        debug!("step");
+    }
+    fn on_finish(&mut self) {
+        debug!("finish");
+    }
+}
 
 fn main() -> Result<(), JsValue> {
     wasm_logger::init(wasm_logger::Config::default());
@@ -13,7 +53,26 @@ fn main() -> Result<(), JsValue> {
     let document = window.document().expect("should have a document on window");
     // let body = document.body().expect("document should have a body");
 
-    // setup button callbacks
+    // setup button callbacks with a shared state
+    let state = Rc::new(Mutex::new(State { value: 0 }));
+    register_onclick(
+        &document,
+        "btn-reset",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_reset(),
+        &state,
+    );
+    register_onclick(
+        &document,
+        "btn-step",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_step(),
+        &state,
+    );
+    register_onclick(
+        &document,
+        "btn-finish",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_finish(),
+        &state,
+    );
 
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
