@@ -1,14 +1,19 @@
 use core::f64;
 
+use log::{debug, info};
 use wasm_bindgen::{prelude::*, Clamped};
 use web_sys::ImageData;
 
 fn main() -> Result<(), JsValue> {
+    wasm_logger::init(wasm_logger::Config::default());
+
     // Use `web_sys`'s global `window` function to get a handle on the global
     // window object.
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
     // let body = document.body().expect("document should have a body");
+
+    // setup button callbacks
 
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
@@ -59,6 +64,9 @@ fn main() -> Result<(), JsValue> {
         ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())?;
 
     context.put_image_data(&image_data_temp, 0.0, 0.0)?;
+
+    info!("Hello World!");
+    debug!("This works!");
 
     Ok(())
 }
