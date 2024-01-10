@@ -44,10 +44,9 @@ trait MapTrait {
         -> impl Iterator<Item = (Self::Reference, usize)>;
 
     /// Create a storage for values of type T
-    fn create_storage<T: Copy + 'static>(
+    fn create_storage<T: Copy + Default + 'static>(
         &self,
-        default_value: T,
-    ) -> impl MapStorage<T, Reference = Self::Reference>;
+    ) -> impl MapStorage<T, Reference = Self::Reference> + 'static;
 }
 
 trait MapStorage<T> {
@@ -182,16 +181,15 @@ impl MapTrait for Map {
         points.into_iter()
     }
 
-    fn create_storage<T: Copy + 'static>(
+    fn create_storage<T: Copy + Default + 'static>(
         &self,
-        default_value: T,
-    ) -> impl MapStorage<T, Reference = Self::Reference> {
-        CellStorage(vec![vec![default_value; self.columns]; self.rows])
+    ) -> impl MapStorage<T, Reference = Self::Reference> + 'static {
+        CellStorage(vec![vec![Default::default(); self.columns]; self.rows])
     }
 }
 
 fn load_image() -> Result<Map, Box<dyn Error>> {
-    let img = image::open("data/maze-03_6_threshold.png")?;
+    let img = image::open("../data/maze-03_6_threshold.png")?;
 
     let width = img.width() as usize;
     let height = img.height() as usize;
@@ -224,7 +222,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     // implement brute force breadth-first search within the validity map
     println!("{}", map);
 
-    let (res, visited) = find_path(&map, Point { row: 14, col: 0 }, Point { row: 44, col: 51 })?;
+    let mut visited = map.create_storage();
+
+    let res = find_path(
+        &map,
+        Point { row: 14, col: 0 },
+        Point { row: 44, col: 51 },
+        &mut visited,
+    )?;
 
     dbg!(res);
 
@@ -274,6 +279,11 @@ struct VisitedItem<R> {
 #[derive(Clone, Copy, Debug)]
 struct Visited<R>(Option<VisitedItem<R>>);
 
+impl<R> Default for Visited<R> {
+    fn default() -> Self {
+        Visited(None)
+    }
+}
 impl<R> Deref for Visited<R> {
     type Target = Option<VisitedItem<R>>;
 
@@ -301,23 +311,21 @@ struct PathResult<R> {
     total_cost: usize,
 }
 
-fn find_path<'a, R: NodeReference, M: MapTrait<Reference = R>>(
-    map: &'a M,
+fn find_path<
+    R: NodeReference,
+    M: MapTrait<Reference = R>,
+    S: MapStorage<Visited<R>, Reference = R>,
+>(
+    map: &M,
     start: R,
     goal: R,
-) -> Result<
-    (
-        PathResult<R>,
-        impl MapStorage<Visited<R>, Reference = R> + 'a,
-    ),
-    Box<dyn Error>,
-> {
+    visited: &mut S,
+) -> Result<PathResult<R>, Box<dyn Error>> {
     // for keeping track of the cost up to the point and the point itself to visit
     // always prioritize visiting the lowest-cost ones, hence use a binary heap as a priority queue
     let mut visit_list: BinaryHeap<ToVisit<R>> = BinaryHeap::new();
 
     // to keep track of where we have been
-    let mut visited = map.create_storage(Visited(None));
 
     visit_list.push(ToVisit {
         cost: 0,
@@ -390,7 +398,7 @@ fn find_path<'a, R: NodeReference, M: MapTrait<Reference = R>>(
     }
 
     // println!("{}", visited);
-    result.ok_or(anyhow!("").into()).map(|r| (r, visited))
+    result.ok_or(anyhow!("").into())
 }
 
 #[cfg(test)]
@@ -423,19 +431,32 @@ mod test {
     fn test_basic_route() {
         let map = create_basic_map();
 
+        let mut visited = map.create_storage();
+
         // test the basic case
         assert!(matches!(
-            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok((PathResult { total_cost: 12, .. }, _))
+            find_path(
+                &map,
+                Point { row: 1, col: 1 },
+                Point { row: 1, col: 5 },
+                &mut visited
+            ),
+            Ok(PathResult { total_cost: 12, .. })
         ));
     }
     #[test]
     fn test_basic_no_route() {
         let map = create_basic_map();
 
+        let mut visited = map.create_storage();
         // no route to target
         assert!(matches!(
-            find_path(&map, Point { row: 1, col: 1 }, Point { row: 0, col: 5 }),
+            find_path(
+                &map,
+                Point { row: 1, col: 1 },
+                Point { row: 0, col: 5 },
+                &mut visited
+            ),
             Err(_)
         ));
     }
@@ -444,23 +465,41 @@ mod test {
     fn test_basic_shortcut() {
         let mut map = create_basic_map();
 
+        let mut visited = map.create_storage();
         // create higher cost shortcut
         map.cells[3][2] = Cell::Cost(2);
         assert!(matches!(
-            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok((PathResult { total_cost: 9, .. }, _))
+            find_path(
+                &map,
+                Point { row: 1, col: 1 },
+                Point { row: 1, col: 5 },
+                &mut visited
+            ),
+            Ok(PathResult { total_cost: 9, .. })
         ));
 
+        let mut visited = map.create_storage();
         map.cells[3][2] = Cell::Cost(4);
         assert!(matches!(
-            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok((PathResult { total_cost: 11, .. }, _))
+            find_path(
+                &map,
+                Point { row: 1, col: 1 },
+                Point { row: 1, col: 5 },
+                &mut visited
+            ),
+            Ok(PathResult { total_cost: 11, .. })
         ));
 
+        let mut visited = map.create_storage();
         map.cells[3][2] = Cell::Cost(10);
         assert!(matches!(
-            find_path(&map, Point { row: 1, col: 1 }, Point { row: 1, col: 5 }),
-            Ok((PathResult { total_cost: 12, .. }, _))
+            find_path(
+                &map,
+                Point { row: 1, col: 1 },
+                Point { row: 1, col: 5 },
+                &mut visited
+            ),
+            Ok(PathResult { total_cost: 12, .. })
         ));
     }
 }
