@@ -3,7 +3,7 @@ use std::{rc::Rc, sync::Mutex};
 
 use log::{debug, info};
 use wasm_bindgen::{prelude::*, Clamped};
-use web_sys::{Document, HtmlElement, ImageData};
+use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, ImageData};
 
 fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
     document: &Document,
@@ -29,18 +29,50 @@ fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
 
 #[derive(Debug)]
 struct State {
-    value: usize,
+    canvas: CanvasRenderingContext2d,
+    image_data: ImageData,
 }
 
 impl State {
-    fn on_reset(&mut self) {
+    fn on_reset(&mut self) -> Result<(), JsValue> {
         debug!("reset");
+        Ok(())
     }
-    fn on_step(&mut self) {
+    fn on_step(&mut self) -> Result<(), JsValue> {
+        let context = &self.canvas;
+        context.begin_path();
+
+        // Draw the outer circle.
+        context
+            .arc(75.0, 75.0, 50.0, 0.0, f64::consts::PI * 2.0)
+            .unwrap();
+
+        // Draw the mouth.
+        context.move_to(110.0, 75.0);
+        context.arc(75.0, 75.0, 35.0, 0.0, f64::consts::PI).unwrap();
+
+        // Draw the left eye.
+        context.move_to(65.0, 65.0);
+        context
+            .arc(60.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
+            .unwrap();
+
+        // Draw the right eye.
+        context.move_to(95.0, 65.0);
+        context
+            .arc(90.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
+            .unwrap();
+
+        context.stroke();
+
+        context.put_image_data(&self.image_data, 0.0, 0.0).unwrap();
+
         debug!("step");
+        Ok(())
     }
-    fn on_finish(&mut self) {
+    fn on_finish(&mut self) -> Result<(), JsValue> {
         debug!("finish");
+        Ok(())
     }
 }
 
@@ -51,28 +83,6 @@ fn main() -> Result<(), JsValue> {
     // window object.
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
-    // let body = document.body().expect("document should have a body");
-
-    // setup button callbacks with a shared state
-    let state = Rc::new(Mutex::new(State { value: 0 }));
-    register_onclick(
-        &document,
-        "btn-reset",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_reset(),
-        &state,
-    );
-    register_onclick(
-        &document,
-        "btn-step",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_step(),
-        &state,
-    );
-    register_onclick(
-        &document,
-        "btn-finish",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_finish(),
-        &state,
-    );
 
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
@@ -87,31 +97,6 @@ fn main() -> Result<(), JsValue> {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    context.begin_path();
-
-    // Draw the outer circle.
-    context
-        .arc(75.0, 75.0, 50.0, 0.0, f64::consts::PI * 2.0)
-        .unwrap();
-
-    // Draw the mouth.
-    context.move_to(110.0, 75.0);
-    context.arc(75.0, 75.0, 35.0, 0.0, f64::consts::PI).unwrap();
-
-    // Draw the left eye.
-    context.move_to(65.0, 65.0);
-    context
-        .arc(60.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
-        .unwrap();
-
-    // Draw the right eye.
-    context.move_to(95.0, 65.0);
-    context
-        .arc(90.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
-        .unwrap();
-
-    context.stroke();
-
     // load the image by including the bytes in the compilation
     let image_bytes = include_bytes!("../../data/maze-03_6_threshold.png");
     let image = image::load_from_memory(image_bytes).expect("could not load image");
@@ -122,7 +107,29 @@ fn main() -> Result<(), JsValue> {
     let image_data_temp =
         ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())?;
 
-    context.put_image_data(&image_data_temp, 0.0, 0.0)?;
+    // setup button callbacks with a shared state
+    let state = Rc::new(Mutex::new(State {
+        canvas: context,
+        image_data: image_data_temp,
+    }));
+    register_onclick(
+        &document,
+        "btn-reset",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_reset().unwrap(),
+        &state,
+    );
+    register_onclick(
+        &document,
+        "btn-step",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_step().unwrap(),
+        &state,
+    );
+    register_onclick(
+        &document,
+        "btn-finish",
+        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_finish().unwrap(),
+        &state,
+    );
 
     info!("Hello World!");
     debug!("This works!");
