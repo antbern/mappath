@@ -1,5 +1,5 @@
 use core::panic;
-use image::GenericImageView;
+
 use std::{
     any::Any,
     cmp::Ordering,
@@ -8,8 +8,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use image::{DynamicImage, GenericImageView};
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum Cell {
+pub enum Cell {
     Invalid,
     Valid,
     Cost(usize),
@@ -31,9 +33,9 @@ impl Display for Cell {
 
 /// Supertrait that collects all the requirements on the NodeReference values
 /// Must be copy, comparable and not references (hence 'static)
-trait NodeReference: Copy + Eq + 'static {}
+pub trait NodeReference: Copy + Eq + 'static {}
 
-trait MapTrait {
+pub trait MapTrait {
     /// The type that can be used to reference nodes in the map
     type Reference: NodeReference;
 
@@ -47,7 +49,7 @@ trait MapTrait {
     ) -> impl MapStorage<T, Reference = Self::Reference> + 'static;
 }
 
-trait MapStorage<T> {
+pub trait MapStorage<T> {
     type Reference: NodeReference;
 
     fn get(&self, node: Self::Reference) -> T;
@@ -57,7 +59,7 @@ trait MapStorage<T> {
 }
 
 /// A MapTrait implementation that uses a rectangular grid of cells
-struct Map {
+pub struct Map {
     rows: usize,
     columns: usize,
     cells: Vec<Vec<Cell>>,
@@ -66,7 +68,7 @@ struct Map {
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
 // TODO: change from vec of vec to one single vec -> better cache friendlyness!
 #[derive(Debug)]
-struct CellStorage<T>(Vec<Vec<T>>);
+pub struct CellStorage<T>(Vec<Vec<T>>);
 
 impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
     type Reference = Point;
@@ -98,9 +100,9 @@ impl<T: Display> Display for CellStorage<T> {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct Point {
-    row: usize,
-    col: usize,
+pub struct Point {
+    pub row: usize,
+    pub col: usize,
 }
 
 impl NodeReference for Point {}
@@ -186,65 +188,7 @@ impl MapTrait for Map {
     }
 }
 
-fn load_image() -> Result<Map, anyhow::Error> {
-    let img = image::open("data/maze-03_6_threshold.png")?;
-
-    let width = img.width() as usize;
-    let height = img.height() as usize;
-
-    let mut cells = vec![vec![Cell::Invalid; width as usize]; height as usize];
-
-    for row in 0..height {
-        for col in 0..width {
-            let p = img.get_pixel(col as u32, row as u32);
-
-            cells[row][col] = if p.0[0] < 128 {
-                Cell::Invalid
-            } else {
-                Cell::Valid
-            }
-        }
-    }
-
-    Ok(Map {
-        rows: height,
-        columns: width,
-        cells,
-    })
-}
-
-#[allow(unused_must_use)]
-fn main() -> Result<(), anyhow::Error> {
-    let map = load_image()?;
-
-    // implement brute force breadth-first search within the validity map
-    println!("{}", map);
-
-    let visited = map.create_storage();
-
-    let (res, visited) = PathFinder::new(
-        &map,
-        Point { row: 14, col: 0 },
-        Point { row: 44, col: 51 },
-        visited,
-    )
-    .finish();
-
-    dbg!(res);
-
-    // a bit hacky for now to get the visited storage back into the concrete type
-    // TODO: might help to have the reference type as generic argument to the map instead...
-    let visited = visited
-        .as_any()
-        .downcast_ref::<CellStorage<Visited<Point>>>()
-        .expect("Wasn't a CellStorage<Visited<Point>>!");
-
-    println!("{}", visited);
-
-    Ok(())
-}
-
-#[derive(Eq)]
+#[derive(Eq, Debug)]
 struct ToVisit<R: Eq> {
     cost: usize,
     point: R,
@@ -270,13 +214,13 @@ impl<R: Eq> PartialEq for ToVisit<R> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct VisitedItem<R> {
+pub struct VisitedItem<R> {
     cost: usize,
     from: Option<R>,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Visited<R>(Option<VisitedItem<R>>);
+pub struct Visited<R>(Option<VisitedItem<R>>);
 
 impl<R> Default for Visited<R> {
     fn default() -> Self {
@@ -305,19 +249,20 @@ impl<R> Display for Visited<R> {
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
-struct PathResult<R> {
+pub struct PathResult<R> {
     path: Vec<R>,
     total_cost: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum PathFinderState<R> {
+pub enum PathFinderState<R> {
     Computing,
     NoPathFound,
     PathFound(PathResult<R>),
 }
 
-struct PathFinder<
+#[derive(Debug)]
+pub struct PathFinder<
     'a,
     R: NodeReference,
     M: MapTrait<Reference = R>,
@@ -447,6 +392,31 @@ impl<
     pub fn goal(&self) -> R {
         self.goal
     }
+}
+
+pub fn parse_img(img: &DynamicImage) -> Result<Map, anyhow::Error> {
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+
+    let mut cells = vec![vec![Cell::Invalid; width as usize]; height as usize];
+
+    for row in 0..height {
+        for col in 0..width {
+            let p = img.get_pixel(col as u32, row as u32);
+
+            cells[row][col] = if p.0[0] < 128 {
+                Cell::Invalid
+            } else {
+                Cell::Valid
+            }
+        }
+    }
+
+    Ok(Map {
+        rows: height,
+        columns: width,
+        cells,
+    })
 }
 
 #[cfg(test)]

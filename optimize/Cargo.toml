@@ -1,10 +1,15 @@
 [package]
-name = "map_optimize"
+name = "optimize"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "optmize"
+path = "bin/main.rs"
+
 
 [dependencies]
 anyhow = "1.0.77"
