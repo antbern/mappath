@@ -11,12 +11,11 @@ fn main() -> Result<(), anyhow::Error> {
     let visited = map.create_storage();
 
     let (res, visited) = PathFinder::new(
-        &map,
         Point { row: 14, col: 0 },
         Point { row: 44, col: 51 },
         visited,
     )
-    .finish();
+    .finish(&map);
 
     dbg!(res);
 

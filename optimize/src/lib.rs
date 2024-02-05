@@ -262,32 +262,19 @@ pub enum PathFinderState<R> {
 }
 
 #[derive(Debug)]
-pub struct PathFinder<
-    'a,
-    R: NodeReference,
-    M: MapTrait<Reference = R>,
-    S: MapStorage<Visited<R>, Reference = R>,
-> {
+pub struct PathFinder<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> {
     start: R,
     goal: R,
-    map: &'a M,
     visited: S,
     visit_list: BinaryHeap<ToVisit<R>>,
     state: PathFinderState<R>,
 }
 
-impl<
-        'a,
-        R: NodeReference,
-        M: MapTrait<Reference = R>,
-        S: MapStorage<Visited<R>, Reference = R>,
-    > PathFinder<'a, R, M, S>
-{
-    pub fn new(map: &'a M, start: R, goal: R, visited: S) -> Self {
+impl<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> PathFinder<R, S> {
+    pub fn new(start: R, goal: R, visited: S) -> Self {
         Self {
             start,
             goal,
-            map,
             visited,
             visit_list: BinaryHeap::from([ToVisit {
                 cost: 0,
@@ -298,16 +285,16 @@ impl<
         }
     }
 
-    pub fn finish(mut self) -> (PathFinderState<R>, S) {
+    pub fn finish<M: MapTrait<Reference = R>>(mut self, map: &M) -> (PathFinderState<R>, S) {
         loop {
-            match self.step() {
+            match self.step(map) {
                 PathFinderState::Computing => {}
                 s => return (s, self.visited),
             }
         }
     }
 
-    pub fn step(&mut self) -> PathFinderState<R> {
+    pub fn step<M: MapTrait<Reference = R>>(&mut self, map: &M) -> PathFinderState<R> {
         if self.state != PathFinderState::Computing {
             return self.state.clone();
         }
@@ -365,7 +352,7 @@ impl<
                 return self.state.clone();
             }
 
-            for (point, move_cost) in self.map.neighbors_of(visit.point) {
+            for (point, move_cost) in map.neighbors_of(visit.point) {
                 if !self.visited.get(point).is_some() {
                     self.visit_list.push(ToVisit {
                         cost: visit.cost + move_cost,
@@ -451,16 +438,11 @@ mod test {
 
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(
-            &map,
-            Point { row: 1, col: 1 },
-            Point { row: 1, col: 5 },
-            visited,
-        );
+        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 
         // test the basic case
         assert!(matches!(
-            finder.finish().0,
+            finder.finish(&map).0,
             PathFinderState::PathFound(PathResult { total_cost: 12, .. })
         ));
     }
@@ -470,14 +452,12 @@ mod test {
 
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(
-            &map,
-            Point { row: 1, col: 1 },
-            Point { row: 0, col: 5 },
-            visited,
-        );
+        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 0, col: 5 }, visited);
         // no route to target
-        assert!(matches!(finder.finish().0, PathFinderState::NoPathFound));
+        assert!(matches!(
+            finder.finish(&map).0,
+            PathFinderState::NoPathFound
+        ));
     }
 
     #[test]
@@ -487,45 +467,30 @@ mod test {
         map.cells[3][2] = Cell::Cost(2);
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(
-            &map,
-            Point { row: 1, col: 1 },
-            Point { row: 1, col: 5 },
-            visited,
-        );
+        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 
         assert!(matches!(
-            finder.finish().0,
+            finder.finish(&map).0,
             PathFinderState::PathFound(PathResult { total_cost: 9, .. })
         ));
 
         let visited = map.create_storage();
         map.cells[3][2] = Cell::Cost(4);
 
-        let finder = PathFinder::new(
-            &map,
-            Point { row: 1, col: 1 },
-            Point { row: 1, col: 5 },
-            visited,
-        );
+        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 
         assert!(matches!(
-            finder.finish().0,
+            finder.finish(&map).0,
             PathFinderState::PathFound(PathResult { total_cost: 11, .. })
         ));
 
         let visited = map.create_storage();
         map.cells[3][2] = Cell::Cost(10);
 
-        let finder = PathFinder::new(
-            &map,
-            Point { row: 1, col: 1 },
-            Point { row: 1, col: 5 },
-            visited,
-        );
+        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 
         assert!(matches!(
-            finder.finish().0,
+            finder.finish(&map).0,
             PathFinderState::PathFound(PathResult { total_cost: 12, .. })
         ));
     }
