@@ -3,7 +3,8 @@ use std::{rc::Rc, sync::Mutex};
 
 use log::{debug, info};
 use optimize::{
-    parse_img, CellStorage, Map, MapStorage, MapTrait, PathFinder, PathFinderState, Point, Visited,
+    parse_img, Cell, CellStorage, Map, MapStorage, MapTrait, PathFinder, PathFinderState, Point,
+    Visited,
 };
 use wasm_bindgen::{prelude::*, Clamped};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, ImageData};
@@ -28,6 +29,27 @@ fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
 
     // See comments https://rustwasm.github.io/wasm-bindgen/examples/closures.html
     closure_btn_clone.forget();
+}
+
+fn create_basic_map() -> Map {
+    use Cell::*;
+    Map {
+        rows: 7,
+        columns: 7,
+        cells: vec![
+            vec![
+                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
+            ],
+            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
+            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
+            vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
+            vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
+            vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
+            vec![
+                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
+            ],
+        ],
+    }
 }
 
 // #[derive(Debug)]
@@ -101,13 +123,13 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
 
         // ctx.begin_path();
 
-        let g = self.pathfinder.goal();
+        let goal = self.pathfinder.goal();
         ctx.set_fill_style(&"00FF00".into());
-        ctx.fill_rect(g.col as f64 * size, g.row as f64 * size, size, size);
+        ctx.fill_rect(goal.col as f64 * size, goal.row as f64 * size, size, size);
 
-        let g = self.pathfinder.start();
+        let start = self.pathfinder.start();
         ctx.set_fill_style(&"00FFFF".into());
-        ctx.fill_rect(g.col as f64 * size, g.row as f64 * size, size, size);
+        ctx.fill_rect(start.col as f64 * size, start.row as f64 * size, size, size);
 
         let visited = self
             .pathfinder
@@ -135,6 +157,32 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
                 ctx.set_fill_style(&color.into());
 
                 ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+            }
+        }
+
+        match self.pathfinder.state() {
+            PathFinderState::Computing => {}
+            PathFinderState::NoPathFound => {}
+            PathFinderState::PathFound(pr) => {
+                ctx.set_stroke_style(&"#FFFFFF".into());
+                ctx.begin_path();
+                ctx.move_to(
+                    start.col as f64 * size + size / 2.0,
+                    start.row as f64 * size + size / 2.0,
+                );
+                for p in &pr.path {
+                    ctx.line_to(
+                        p.col as f64 * size + size / 2.0,
+                        p.row as f64 * size + size / 2.0,
+                    );
+                }
+
+                ctx.move_to(
+                    goal.col as f64 * size + size / 2.0,
+                    goal.row as f64 * size + size / 2.0,
+                );
+
+                ctx.stroke();
             }
         }
 
@@ -175,12 +223,15 @@ fn main() -> Result<(), JsValue> {
 
     let map = parse_img(&image).unwrap();
 
-    let storage = map.create_storage::<Visited<Point>>();
+    // let mut map = create_basic_map();
+    // map.cells[3][2] = Cell::Cost(4);
 
     let finder = PathFinder::new(
         Point { row: 14, col: 0 },
         Point { row: 44, col: 51 },
-        storage,
+        // Point { row: 1, col: 1 },
+        // Point { row: 1, col: 5 },
+        map.create_storage::<Visited<Point>>(),
     );
     // setup button callbacks with a shared state
     let state = Rc::new(Mutex::new(State {

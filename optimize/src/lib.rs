@@ -250,8 +250,8 @@ impl<R> Display for Visited<R> {
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct PathResult<R> {
-    path: Vec<R>,
-    total_cost: usize,
+    pub path: Vec<R>,
+    pub total_cost: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -366,6 +366,10 @@ impl<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> PathFinder<R, S
         }
 
         return self.state.clone();
+    }
+
+    pub fn state(&self) -> &PathFinderState<R> {
+        &self.state
     }
 
     pub fn get_visited(&self) -> &S {
