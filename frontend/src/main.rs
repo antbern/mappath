@@ -2,6 +2,7 @@ use core::f64;
 use std::{rc::Rc, sync::Mutex};
 
 use log::{debug, info};
+use optimize::{parse_img, CellStorage, Map, MapStorage, MapTrait, PathFinder, Point, Visited};
 use wasm_bindgen::{prelude::*, Clamped};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, ImageData};
 
@@ -27,13 +28,16 @@ fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
     closure_btn_clone.forget();
 }
 
-#[derive(Debug)]
-struct State {
+// #[derive(Debug)]
+struct State<S: MapStorage<Visited<Point>, Reference = Point>> {
     canvas: CanvasRenderingContext2d,
     image_data: ImageData,
+    // pathfinder: PathFinder<Point, CellStorage<Visited<Point>>>,
+    pathfinder: PathFinder<Point, S>,
+    map: Map,
 }
 
-impl State {
+impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
     fn on_reset(&mut self) -> Result<(), JsValue> {
         debug!("reset");
         Ok(())
@@ -66,6 +70,9 @@ impl State {
         context.stroke();
 
         context.put_image_data(&self.image_data, 0.0, 0.0).unwrap();
+
+        // let visited: &CellStorage<Visited<Point>> = storage.as_any().downcast_ref().unwrap();
+        // let visited = visited.to_owned();
 
         debug!("step");
         Ok(())
@@ -107,27 +114,39 @@ fn main() -> Result<(), JsValue> {
     let image_data_temp =
         ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())?;
 
+    let map = parse_img(&image).unwrap();
+
+    let storage = map.create_storage::<Visited<Point>>();
+
+    let finder = PathFinder::new(
+        Point { row: 14, col: 0 },
+        Point { row: 44, col: 51 },
+        storage,
+    );
+
     // setup button callbacks with a shared state
     let state = Rc::new(Mutex::new(State {
         canvas: context,
         image_data: image_data_temp,
+        pathfinder: finder,
+        map: map,
     }));
     register_onclick(
         &document,
         "btn-reset",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_reset().unwrap(),
+        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_reset().unwrap(),
         &state,
     );
     register_onclick(
         &document,
         "btn-step",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_step().unwrap(),
+        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_step().unwrap(),
         &state,
     );
     register_onclick(
         &document,
         "btn-finish",
-        |state: &Rc<Mutex<State>>| state.lock().expect("Could not lock").on_finish().unwrap(),
+        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_finish().unwrap(),
         &state,
     );
 
