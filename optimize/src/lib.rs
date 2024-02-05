@@ -60,9 +60,9 @@ pub trait MapStorage<T> {
 
 /// A MapTrait implementation that uses a rectangular grid of cells
 pub struct Map {
-    rows: usize,
-    columns: usize,
-    cells: Vec<Vec<Cell>>,
+    pub rows: usize,
+    pub columns: usize,
+    pub cells: Vec<Vec<Cell>>,
 }
 
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
@@ -215,8 +215,8 @@ impl<R: Eq> PartialEq for ToVisit<R> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct VisitedItem<R> {
-    cost: usize,
-    from: Option<R>,
+    pub cost: usize,
+    pub from: Option<R>,
 }
 
 #[derive(Clone, Copy, Debug)]

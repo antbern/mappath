@@ -2,7 +2,9 @@ use core::f64;
 use std::{rc::Rc, sync::Mutex};
 
 use log::{debug, info};
-use optimize::{parse_img, CellStorage, Map, MapStorage, MapTrait, PathFinder, Point, Visited};
+use optimize::{
+    parse_img, CellStorage, Map, MapStorage, MapTrait, PathFinder, PathFinderState, Point, Visited,
+};
 use wasm_bindgen::{prelude::*, Clamped};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, ImageData};
 
@@ -40,45 +42,102 @@ struct State<S: MapStorage<Visited<Point>, Reference = Point>> {
 impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
     fn on_reset(&mut self) -> Result<(), JsValue> {
         debug!("reset");
+
+        // let storage = self.map.create_storage::<Visited<Point>>();
+
+        // let finder = PathFinder::new(
+        //     Point { row: 14, col: 0 },
+        //     Point { row: 44, col: 51 },
+        //     storage,
+        // );
+
+        // self.pathfinder = finder;
         Ok(())
     }
     fn on_step(&mut self) -> Result<(), JsValue> {
-        let context = &self.canvas;
-        context.begin_path();
+        debug!("step");
 
-        // Draw the outer circle.
-        context
-            .arc(75.0, 75.0, 50.0, 0.0, f64::consts::PI * 2.0)
-            .unwrap();
-
-        // Draw the mouth.
-        context.move_to(110.0, 75.0);
-        context.arc(75.0, 75.0, 35.0, 0.0, f64::consts::PI).unwrap();
-
-        // Draw the left eye.
-        context.move_to(65.0, 65.0);
-        context
-            .arc(60.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
-            .unwrap();
-
-        // Draw the right eye.
-        context.move_to(95.0, 65.0);
-        context
-            .arc(90.0, 65.0, 5.0, 0.0, f64::consts::PI * 2.0)
-            .unwrap();
-
-        context.stroke();
-
-        context.put_image_data(&self.image_data, 0.0, 0.0).unwrap();
-
+        // if let Some(finder) = &mut self.pathfinder {
+        self.pathfinder.step(&self.map);
+        // } else {
+        // self.pathfinder = Some(finder);
+        // }
         // let visited: &CellStorage<Visited<Point>> = storage.as_any().downcast_ref().unwrap();
         // let visited = visited.to_owned();
 
-        debug!("step");
+        self.draw()?;
         Ok(())
     }
     fn on_finish(&mut self) -> Result<(), JsValue> {
         debug!("finish");
+
+        loop {
+            match self.pathfinder.step(&self.map) {
+                PathFinderState::Computing => {}
+                s => break,
+            }
+        }
+
+        // if let Some(finder) = self.pathfinder {
+        // finder.finish(&self.map);
+        // }
+
+        self.draw()?;
+
+        Ok(())
+    }
+
+    fn draw(&self) -> Result<(), JsValue> {
+        let ctx = &self.canvas;
+        let canvas = ctx.canvas().unwrap();
+
+        let size = 10.0;
+
+        canvas.set_width((self.map.columns as f64 * size) as u32);
+        canvas.set_height((self.map.rows as f64 * size) as u32);
+        ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+
+        // draw the cells of the map
+
+        // ctx.begin_path();
+
+        let g = self.pathfinder.goal();
+        ctx.set_fill_style(&"00FF00".into());
+        ctx.fill_rect(g.col as f64 * size, g.row as f64 * size, size, size);
+
+        let g = self.pathfinder.start();
+        ctx.set_fill_style(&"00FFFF".into());
+        ctx.fill_rect(g.col as f64 * size, g.row as f64 * size, size, size);
+
+        let visited = self
+            .pathfinder
+            .get_visited()
+            .as_any()
+            .downcast_ref::<CellStorage<Visited<Point>>>()
+            .unwrap();
+
+        for row in 0..self.map.rows {
+            for col in 0..self.map.columns {
+                let cell = self.map.cells[row][col];
+
+                let r = Point { row, col };
+
+                let v = visited.get(r);
+
+                let color = match (cell, *v) {
+                    (optimize::Cell::Invalid, _) => "#000000".into(),
+                    (optimize::Cell::Valid, Some(f)) => format!("rgb({}, 0.0, 0.0)", f.cost),
+                    (optimize::Cell::Cost(_), Some(_)) => "#FFFF00".into(),
+                    (optimize::Cell::Valid, _) => "#FFFFFF".into(),
+                    (optimize::Cell::Cost(_), _) => "#FF0000".into(),
+                };
+
+                ctx.set_fill_style(&color.into());
+
+                ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+            }
+        }
+
         Ok(())
     }
 }
@@ -123,7 +182,6 @@ fn main() -> Result<(), JsValue> {
         Point { row: 44, col: 51 },
         storage,
     );
-
     // setup button callbacks with a shared state
     let state = Rc::new(Mutex::new(State {
         canvas: context,
