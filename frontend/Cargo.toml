@@ -27,4 +27,5 @@ features = [
   'CanvasRenderingContext2d',
   'HtmlCanvasElement',
   'ImageData',
+  'MouseEvent',
 ]

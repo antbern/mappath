@@ -13,9 +13,8 @@ fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
     document: &Document,
     id: &str,
     mut callback: T,
-    state: &Rc<S>,
+    state: Rc<S>,
 ) {
-    let state = state.clone();
     let closure_btn_clone = Closure::<dyn FnMut()>::new(move || {
         callback(&state);
     });
@@ -62,7 +61,7 @@ struct State<S: MapStorage<Visited<Point>, Reference = Point>> {
 }
 
 impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
-    fn on_reset(&mut self) -> Result<(), JsValue> {
+    fn on_reset(&mut self, input: &Rc<Mutex<Input>>) -> Result<(), JsValue> {
         debug!("reset");
 
         // let storage = self.map.create_storage::<Visited<Point>>();
@@ -76,7 +75,7 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
         // self.pathfinder = finder;
         Ok(())
     }
-    fn on_step(&mut self) -> Result<(), JsValue> {
+    fn on_step(&mut self, input: &Rc<Mutex<Input>>) -> Result<(), JsValue> {
         debug!("step");
 
         // if let Some(finder) = &mut self.pathfinder {
@@ -87,10 +86,10 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
         // let visited: &CellStorage<Visited<Point>> = storage.as_any().downcast_ref().unwrap();
         // let visited = visited.to_owned();
 
-        self.draw()?;
+        self.draw(input)?;
         Ok(())
     }
-    fn on_finish(&mut self) -> Result<(), JsValue> {
+    fn on_finish(&mut self, input: &Rc<Mutex<Input>>) -> Result<(), JsValue> {
         debug!("finish");
 
         loop {
@@ -104,12 +103,12 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
         // finder.finish(&self.map);
         // }
 
-        self.draw()?;
+        self.draw(input)?;
 
         Ok(())
     }
 
-    fn draw(&self) -> Result<(), JsValue> {
+    fn draw(&self, input: &Rc<Mutex<Input>>) -> Result<(), JsValue> {
         let ctx = &self.canvas;
         let canvas = ctx.canvas().unwrap();
 
@@ -186,7 +185,45 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
             }
         }
 
+        // get the cell the user is hovering
+        if let Some((x, y)) = input.lock().unwrap().current_mouse_position() {
+            let row = (y as f64 / size) as i32;
+            let col = (x as f64 / size) as i32;
+
+            ctx.set_fill_style(&"#00FF00".into());
+            ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+        }
+
         Ok(())
+    }
+}
+
+struct Input {
+    mouse_position: Option<(i32, i32)>,
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Self {
+            mouse_position: Default::default(),
+        }
+    }
+}
+impl Input {
+    pub fn on_mouse_enter(&mut self, event: web_sys::MouseEvent) {
+        self.mouse_position = Some((event.offset_x(), event.offset_y()));
+    }
+
+    pub fn on_mouse_move(&mut self, event: web_sys::MouseEvent) {
+        self.mouse_position = Some((event.offset_x(), event.offset_y()));
+    }
+
+    pub fn on_mouse_leave(&mut self, _event: web_sys::MouseEvent) {
+        self.mouse_position = None;
+    }
+
+    pub fn current_mouse_position(&self) -> Option<(i32, i32)> {
+        self.mouse_position
     }
 }
 
@@ -240,27 +277,96 @@ fn main() -> Result<(), JsValue> {
         pathfinder: finder,
         map: map,
     }));
+
+    // create input and register mouse event handlers
+    let input = Rc::new(Mutex::new(Input::default()));
+    {
+        let input = input.clone();
+        let state = state.clone();
+        let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+            debug!("Moved: {}:{}", event.offset_x(), event.offset_y());
+            input
+                .lock()
+                .expect("Could not lock input")
+                .on_mouse_enter(event);
+            state.lock().unwrap().draw(&input).unwrap();
+        });
+        canvas.add_event_listener_with_callback("mouseenter", closure.as_ref().unchecked_ref())?;
+        closure.forget();
+    }
+
+    {
+        let input = input.clone();
+        let state = state.clone();
+        let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+            // debug!("Moved: {}:{}", event.offset_x(), event.offset_y());
+            input
+                .lock()
+                .expect("Could not lock input")
+                .on_mouse_move(event);
+
+            state.lock().unwrap().draw(&input).unwrap();
+        });
+        canvas.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())?;
+        closure.forget();
+    }
+
+    {
+        let input = input.clone();
+        let state = state.clone();
+        let closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MouseEvent| {
+            input
+                .lock()
+                .expect("Could not lock input")
+                .on_mouse_leave(event);
+
+            state.lock().unwrap().draw(&input).unwrap();
+        });
+        canvas.add_event_listener_with_callback("mouseleave", closure.as_ref().unchecked_ref())?;
+        closure.forget();
+    }
+
+    let state_input = Rc::new((state, input));
+
     register_onclick(
         &document,
         "btn-reset",
-        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_reset().unwrap(),
-        &state,
+        |state_input| {
+            let (state, input) = state_input.as_ref();
+            state
+                .lock()
+                .expect("Could not lock")
+                .on_reset(input)
+                .unwrap()
+        },
+        state_input.clone(),
     );
     register_onclick(
         &document,
         "btn-step",
-        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_step().unwrap(),
-        &state,
+        |state_input| {
+            let (state, input) = state_input.as_ref();
+            state
+                .lock()
+                .expect("Could not lock")
+                .on_step(input)
+                .unwrap()
+        },
+        state_input.clone(),
     );
     register_onclick(
         &document,
         "btn-finish",
-        |state: &Rc<Mutex<State<_>>>| state.lock().expect("Could not lock").on_finish().unwrap(),
-        &state,
+        |state_input| {
+            let (state, input) = state_input.as_ref();
+            state
+                .lock()
+                .expect("Could not lock")
+                .on_finish(input)
+                .unwrap()
+        },
+        state_input.clone(),
     );
-
-    info!("Hello World!");
-    debug!("This works!");
 
     Ok(())
 }
