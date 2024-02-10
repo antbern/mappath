@@ -28,4 +28,5 @@ features = [
   'HtmlCanvasElement',
   'ImageData',
   'MouseEvent',
+  'HtmlPreElement',
 ]

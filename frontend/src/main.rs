@@ -1,13 +1,13 @@
 use core::f64;
 use std::{rc::Rc, sync::Mutex};
 
-use log::{debug, info};
+use log::debug;
 use optimize::{
     parse_img, Cell, CellStorage, Map, MapStorage, MapTrait, PathFinder, PathFinderState, Point,
     Visited,
 };
 use wasm_bindgen::{prelude::*, Clamped};
-use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, ImageData};
+use web_sys::{CanvasRenderingContext2d, Document, HtmlElement, HtmlPreElement, ImageData};
 
 fn register_onclick<S: 'static, T: FnMut(&Rc<S>) -> () + 'static>(
     document: &Document,
@@ -54,6 +54,7 @@ fn create_basic_map() -> Map {
 // #[derive(Debug)]
 struct State<S: MapStorage<Visited<Point>, Reference = Point>> {
     canvas: CanvasRenderingContext2d,
+    output: HtmlPreElement,
     image_data: ImageData,
     // pathfinder: PathFinder<Point, CellStorage<Visited<Point>>>,
     pathfinder: PathFinder<Point, S>,
@@ -187,11 +188,18 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
 
         // get the cell the user is hovering
         if let Some((x, y)) = input.lock().unwrap().current_mouse_position() {
-            let row = (y as f64 / size) as i32;
-            let col = (x as f64 / size) as i32;
+            let row = (y as f64 / size) as usize;
+            let col = (x as f64 / size) as usize;
 
             ctx.set_fill_style(&"#00FF00".into());
             ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+
+            let v = visited.get(Point { row, col });
+
+            self.output.set_inner_text(&format!(
+                "Cell @{row}:{col}\n{:?}\n\n{:?}",
+                self.map.cells[row][col], v
+            ));
         }
 
         Ok(())
@@ -248,6 +256,12 @@ fn main() -> Result<(), JsValue> {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
+    let output = document.get_element_by_id("output").unwrap();
+    let output: web_sys::HtmlPreElement = output
+        .dyn_into::<web_sys::HtmlPreElement>()
+        .map_err(|_| ())
+        .unwrap();
+
     // load the image by including the bytes in the compilation
     let image_bytes = include_bytes!("../../data/maze-03_6_threshold.png");
     let image = image::load_from_memory(image_bytes).expect("could not load image");
@@ -273,6 +287,7 @@ fn main() -> Result<(), JsValue> {
     // setup button callbacks with a shared state
     let state = Rc::new(Mutex::new(State {
         canvas: context,
+        output,
         image_data: image_data_temp,
         pathfinder: finder,
         map: map,
