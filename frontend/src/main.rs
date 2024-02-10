@@ -200,6 +200,8 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> State<S> {
                 "Cell @{row}:{col}\n{:?}\n\n{:?}",
                 self.map.cells[row][col], v
             ));
+        } else {
+            self.output.set_inner_text("");
         }
 
         Ok(())
