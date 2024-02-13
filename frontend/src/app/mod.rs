@@ -20,7 +20,7 @@ pub struct AppImpl<M: MapTrait> {
 impl AppImpl<Map> {
     pub fn new(_context: &Context) -> Self {
         // load the image by including the bytes in the compilation
-        let image_bytes = include_bytes!("../../data/maze-03_6_threshold.png");
+        let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
         let image = image::load_from_memory(image_bytes).expect("could not load image");
 
         let rgba_image = image.to_rgba8();
