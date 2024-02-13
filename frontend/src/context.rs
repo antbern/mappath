@@ -1,3 +1,4 @@
+use log::debug;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -50,6 +51,7 @@ impl Context {
 
     pub fn push_event(&self, event: Event) {
         self.write(|inner| {
+            debug!("pushing event: {:?}", event);
             inner.events.push_back(event);
             inner.input.on_event(event);
         });
@@ -86,8 +88,8 @@ impl Default for Input {
 impl Input {
     pub fn on_event(&mut self, event: Event) {
         match event {
-            Event::MouseEnter(x, y) => self.mouse_position = Some((x, y)),
-            Event::MouseMove(x, y) => self.mouse_position = Some((x, y)),
+            Event::MouseEnter { x, y } => self.mouse_position = Some((x, y)),
+            Event::MouseMove { x, y } => self.mouse_position = Some((x, y)),
             Event::MouseLeave => self.mouse_position = None,
             _ => {}
         }
