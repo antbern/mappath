@@ -11,6 +11,8 @@ use web_sys::ImageData;
 pub struct AppImpl<M: MapTrait> {
     pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
     map: M,
+    start: M::Reference,
+    goal: M::Reference,
 }
 
 impl AppImpl<Map> {
@@ -31,15 +33,16 @@ impl AppImpl<Map> {
         // let mut map = create_basic_map();
         // map.cells[3][2] = Cell::Cost(4);
 
-        let finder = PathFinder::new(
-            Point { row: 14, col: 0 },
-            Point { row: 44, col: 51 },
-            map.create_storage::<Visited<Point>>(),
-        );
+        let start = Point { row: 14, col: 0 };
+        let goal = Point { row: 44, col: 51 };
+
+        let finder = PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
 
         Self {
             pathfinder: finder,
             map,
+            start,
+            goal,
         }
     }
 }
@@ -49,7 +52,13 @@ impl App for AppImpl<Map> {
         // handle any pending events
         while let Some(event) = context.pop_event() {
             match event {
-                Event::ButtonPressed(ButtonId::Reset) => {}
+                Event::ButtonPressed(ButtonId::Reset) => {
+                    self.pathfinder = PathFinder::new(
+                        self.start,
+                        self.goal,
+                        self.map.create_storage::<Visited<Point>>(),
+                    );
+                }
                 Event::ButtonPressed(ButtonId::Step) => {
                     self.pathfinder.step(&self.map);
                 }
