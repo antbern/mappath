@@ -251,6 +251,8 @@ impl<R> Display for Visited<R> {
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct PathResult<R> {
     pub path: Vec<R>,
+    pub start: R,
+    pub goal: R,
     pub total_cost: usize,
 }
 
@@ -358,6 +360,8 @@ impl<
                 self.state = PathFinderState::PathFound(PathResult {
                     path: path,
                     total_cost: visit.cost,
+                    start: self.start,
+                    goal: self.goal,
                 });
 
                 return self.state.clone();

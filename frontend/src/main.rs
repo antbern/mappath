@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 use app::AppImpl;
 use context::{Context, ContextImpl, Input};
 use event::ButtonId;
-use log::debug;
 use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
@@ -32,7 +31,7 @@ fn register_onclick<T: FnMut() -> () + 'static>(document: &Document, id: &str, c
     closure_btn_clone.forget();
 }
 
-fn regiester_mouse_event<T: FnMut(web_sys::MouseEvent) -> () + 'static>(
+fn register_canvas_event<T: FnMut(web_sys::MouseEvent) -> () + 'static>(
     canvas: &HtmlCanvasElement,
     event: &str,
     callback: T,
@@ -125,7 +124,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "mouseenter", move |event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "mouseenter", move |event: web_sys::MouseEvent| {
             context.push_event(Event::MouseEnter {
                 x: event.offset_x(),
                 y: event.offset_y(),
@@ -136,7 +135,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "mousemove", move |event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "mousemove", move |event: web_sys::MouseEvent| {
             context.push_event(Event::MouseMove {
                 x: event.offset_x(),
                 y: event.offset_y(),
@@ -147,7 +146,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "mouseleave", move |_event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "mouseleave", move |_event: web_sys::MouseEvent| {
             context.push_event(Event::MouseLeave);
             request_repaint();
         });
@@ -155,7 +154,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "mousedown", move |event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "mousedown", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MousePressed {
                     x: event.offset_x(),
@@ -169,7 +168,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "mouseup", move |event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "mouseup", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MouseReleased {
                     x: event.offset_x(),
@@ -183,7 +182,7 @@ fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        regiester_mouse_event(&canvas, "click", move |event: web_sys::MouseEvent| {
+        register_canvas_event(&canvas, "click", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MouseClicked {
                     x: event.offset_x(),
@@ -194,6 +193,7 @@ fn main() -> Result<(), JsValue> {
             }
         });
     }
+
     for button in ButtonId::iterate() {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
