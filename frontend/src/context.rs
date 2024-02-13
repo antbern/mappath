@@ -1,6 +1,9 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
 use web_sys::HtmlPreElement;
+
+use crate::event::Event;
 
 #[derive(Clone)]
 pub struct Context {
@@ -34,10 +37,6 @@ impl Context {
 }
 
 impl Context {
-    pub fn draw(&self, f: impl FnOnce(&web_sys::CanvasRenderingContext2d)) {
-        self.write(|inner| f(&inner.rendering_context));
-    }
-
     pub fn set_output(&self, output: &str) {
         self.write(|inner| inner.output.set_inner_text(output));
     }
@@ -45,12 +44,31 @@ impl Context {
     pub fn input<R>(&self, f: impl FnOnce(&Input) -> R) -> R {
         self.read(|inner| f(&inner.input))
     }
-    pub fn input_mut<R>(&self, f: impl FnOnce(&mut Input) -> R) -> R {
-        self.write(|inner| f(&mut inner.input))
+    // pub fn input_mut<R>(&self, f: impl FnOnce(&mut Input) -> R) -> R {
+    //     self.write(|inner| f(&mut inner.input))
+    // }
+
+    pub fn push_event(&self, event: Event) {
+        self.write(|inner| {
+            inner.events.push_back(event);
+            inner.input.on_event(event);
+        });
     }
 
-    pub fn canvas(&self, f: impl FnOnce(&web_sys::HtmlCanvasElement)) {
-        self.read(|inner| f(&inner.canvas));
+    pub fn pop_event(&self) -> Option<Event> {
+        self.write(|inner| inner.events.pop_front())
+    }
+
+    pub fn request_repaint(&self) {
+        self.write(|inner| inner.repaint_requested = true);
+    }
+
+    pub fn is_repaint_requested(&self) -> bool {
+        self.write(|inner| {
+            let repaint_requested = inner.repaint_requested;
+            inner.repaint_requested = false;
+            repaint_requested
+        })
     }
 }
 
@@ -66,16 +84,13 @@ impl Default for Input {
     }
 }
 impl Input {
-    pub fn on_mouse_enter(&mut self, event: web_sys::MouseEvent) {
-        self.mouse_position = Some((event.offset_x(), event.offset_y()));
-    }
-
-    pub fn on_mouse_move(&mut self, event: web_sys::MouseEvent) {
-        self.mouse_position = Some((event.offset_x(), event.offset_y()));
-    }
-
-    pub fn on_mouse_leave(&mut self, _event: web_sys::MouseEvent) {
-        self.mouse_position = None;
+    pub fn on_event(&mut self, event: Event) {
+        match event {
+            Event::MouseEnter(x, y) => self.mouse_position = Some((x, y)),
+            Event::MouseMove(x, y) => self.mouse_position = Some((x, y)),
+            Event::MouseLeave => self.mouse_position = None,
+            _ => {}
+        }
     }
 
     pub fn current_mouse_position(&self) -> Option<(i32, i32)> {
@@ -83,8 +98,8 @@ impl Input {
     }
 }
 pub struct ContextImpl {
-    pub rendering_context: web_sys::CanvasRenderingContext2d,
-    pub canvas: web_sys::HtmlCanvasElement,
     pub output: HtmlPreElement,
     pub input: Input,
+    pub events: VecDeque<Event>,
+    pub repaint_requested: bool,
 }
