@@ -71,6 +71,7 @@ impl App for AppImpl<Map> {
         canvas.set_width((self.map.columns as f64 * size) as u32);
         canvas.set_height((self.map.rows as f64 * size) as u32);
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        ctx.scale(size, size).unwrap();
 
         // draw the cells of the map
 
@@ -78,11 +79,11 @@ impl App for AppImpl<Map> {
 
         let goal = self.pathfinder.goal();
         ctx.set_fill_style(&"00FF00".into());
-        ctx.fill_rect(goal.col as f64 * size, goal.row as f64 * size, size, size);
+        ctx.fill_rect(goal.col as f64, goal.row as f64, 1.0, 1.0);
 
         let start = self.pathfinder.start();
         ctx.set_fill_style(&"00FFFF".into());
-        ctx.fill_rect(start.col as f64 * size, start.row as f64 * size, size, size);
+        ctx.fill_rect(start.col as f64, start.row as f64, 1.0, 1.0);
 
         let visited = self.pathfinder.get_visited();
 
@@ -106,7 +107,7 @@ impl App for AppImpl<Map> {
 
                 ctx.set_fill_style(&color.into());
 
-                ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+                ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
             }
         }
 
@@ -115,22 +116,14 @@ impl App for AppImpl<Map> {
             PathFinderState::NoPathFound => {}
             PathFinderState::PathFound(pr) => {
                 ctx.set_stroke_style(&"#FFFFFF".into());
+                ctx.set_line_width(1.0 / size);
                 ctx.begin_path();
-                ctx.move_to(
-                    start.col as f64 * size + size / 2.0,
-                    start.row as f64 * size + size / 2.0,
-                );
+                ctx.move_to(start.col as f64 + 0.5, start.row as f64 + 0.5);
                 for p in &pr.path {
-                    ctx.line_to(
-                        p.col as f64 * size + size / 2.0,
-                        p.row as f64 * size + size / 2.0,
-                    );
+                    ctx.line_to(p.col as f64 + 0.5, p.row as f64 + 0.5);
                 }
 
-                ctx.move_to(
-                    goal.col as f64 * size + size / 2.0,
-                    goal.row as f64 * size + size / 2.0,
-                );
+                ctx.move_to(goal.col as f64 + 0.5, goal.row as f64 + 0.5);
 
                 ctx.stroke();
             }
@@ -142,7 +135,7 @@ impl App for AppImpl<Map> {
             let col = (x as f64 / size) as usize;
 
             ctx.set_fill_style(&"#00FF00".into());
-            ctx.fill_rect(col as f64 * size, row as f64 * size, size, size);
+            ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
 
             let v = visited.get(Point { row, col });
 
