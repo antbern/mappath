@@ -59,7 +59,6 @@ impl App for AppImpl<Map> {
                         _s => break,
                     }
                 },
-                Event::MouseMove(_, _) | Event::MouseEnter(_, _) | Event::MouseLeave => {}
                 _ => {}
             }
         }

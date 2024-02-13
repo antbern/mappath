@@ -146,15 +146,11 @@ fn main() -> Result<(), JsValue> {
         });
     }
 
-    for (id, value) in vec![
-        ("btn-reset", ButtonId::Reset),
-        ("btn-step", ButtonId::Step),
-        ("btn-finish", ButtonId::Finish),
-    ] {
+    for button in ButtonId::iterate() {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        register_onclick(&document, id, move || {
-            context.push_event(Event::ButtonPressed(value));
+        register_onclick(&document, button.id_str(), move || {
+            context.push_event(Event::ButtonPressed(button));
             request_repaint();
         });
     }
