@@ -3,15 +3,20 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 use app::AppImpl;
 use context::{Context, ContextImpl, Input};
 use event::ButtonId;
-use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
-use wasm_bindgen::{prelude::*, Clamped};
-use web_sys::{Document, HtmlCanvasElement, HtmlElement, ImageData};
+use optimize::{Cell, Map};
+use wasm_bindgen::prelude::*;
+use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
 
-use crate::{app::App, event::Event};
+use crate::event::Event;
 
 mod app;
 mod context;
 mod event;
+
+/// The main entry point for the application
+pub trait App {
+    fn render(&mut self, ctx: &Context, rendering_ctx: &CanvasRenderingContext2d);
+}
 
 fn register_onclick<T: FnMut() -> () + 'static>(document: &Document, id: &str, callback: T) {
     let closure_btn_clone = Closure::<dyn FnMut()>::new(callback);
@@ -154,28 +159,6 @@ fn main() -> Result<(), JsValue> {
         });
     }
 
-    // load the image by including the bytes in the compilation
-    let image_bytes = include_bytes!("../../data/maze-03_6_threshold.png");
-    let image = image::load_from_memory(image_bytes).expect("could not load image");
-
-    let rgba_image = image.to_rgba8();
-
-    let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
-    let _image_data_temp =
-        ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())?;
-
-    let map = parse_img(&image).unwrap();
-
-    // let mut map = create_basic_map();
-    // map.cells[3][2] = Cell::Cost(4);
-
-    let finder = PathFinder::new(
-        Point { row: 14, col: 0 },
-        Point { row: 44, col: 51 },
-        map.create_storage::<Visited<Point>>(),
-    );
-    // setup button callbacks with a shared state
-    let mut state = AppImpl::new(finder, map);
     // register animation frame function
     //
     // create a closure that will be called by the browser's animation frame
@@ -183,8 +166,11 @@ fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
 
+        // initialize the app
+        let mut app = AppImpl::new(&context);
+
         move || {
-            state.render(&context, &rendering_context);
+            app.render(&context, &rendering_context);
 
             // if the app requested to be repainted, schedule another call
             if context.is_repaint_requested() {

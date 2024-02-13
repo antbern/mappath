@@ -39,14 +39,15 @@ pub trait MapTrait {
     /// The type that can be used to reference nodes in the map
     type Reference: NodeReference;
 
+    /// The type that the map uses for storage
+    type Storage<T: Default + Copy + Clone + 'static>: MapStorage<T, Reference = Self::Reference>;
+
     /// Return an iterator over the neighbors of the provided node and the cost required to go there
     fn neighbors_of(&self, node: Self::Reference)
         -> impl Iterator<Item = (Self::Reference, usize)>;
 
     /// Create a storage for values of type T
-    fn create_storage<T: Copy + Default + 'static>(
-        &self,
-    ) -> impl MapStorage<T, Reference = Self::Reference> + 'static;
+    fn create_storage<T: Default + Copy + Clone + 'static>(&self) -> Self::Storage<T>;
 }
 
 pub trait MapStorage<T> {
@@ -122,6 +123,7 @@ impl Display for Map {
 
 impl MapTrait for Map {
     type Reference = Point;
+    type Storage<T: Default + Copy + Clone + 'static> = CellStorage<T>;
 
     fn neighbors_of(
         &self,
@@ -181,9 +183,7 @@ impl MapTrait for Map {
         points.into_iter()
     }
 
-    fn create_storage<T: Copy + Default + 'static>(
-        &self,
-    ) -> impl MapStorage<T, Reference = Self::Reference> + 'static {
+    fn create_storage<T: Default + Copy + Clone + 'static>(&self) -> Self::Storage<T> {
         CellStorage(vec![vec![Default::default(); self.columns]; self.rows])
     }
 }
@@ -262,15 +262,25 @@ pub enum PathFinderState<R> {
 }
 
 #[derive(Debug)]
-pub struct PathFinder<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> {
+pub struct PathFinder<
+    R: NodeReference,
+    S: MapStorage<Visited<R>, Reference = R>,
+    M: MapTrait<Reference = R, Storage<Visited<R>> = S>,
+> {
     start: R,
     goal: R,
     visited: S,
     visit_list: BinaryHeap<ToVisit<R>>,
     state: PathFinderState<R>,
+    _map: std::marker::PhantomData<M>,
 }
 
-impl<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> PathFinder<R, S> {
+impl<
+        R: NodeReference,
+        S: MapStorage<Visited<R>, Reference = R>,
+        M: MapTrait<Reference = R, Storage<Visited<R>> = S>,
+    > PathFinder<R, S, M>
+{
     pub fn new(start: R, goal: R, visited: S) -> Self {
         Self {
             start,
@@ -282,10 +292,11 @@ impl<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> PathFinder<R, S
                 from: None,
             }]),
             state: PathFinderState::Computing,
+            _map: std::marker::PhantomData,
         }
     }
 
-    pub fn finish<M: MapTrait<Reference = R>>(mut self, map: &M) -> (PathFinderState<R>, S) {
+    pub fn finish(mut self, map: &M) -> (PathFinderState<R>, S) {
         loop {
             match self.step(map) {
                 PathFinderState::Computing => {}
@@ -294,7 +305,7 @@ impl<R: NodeReference, S: MapStorage<Visited<R>, Reference = R>> PathFinder<R, S
         }
     }
 
-    pub fn step<M: MapTrait<Reference = R>>(&mut self, map: &M) -> PathFinderState<R> {
+    pub fn step(&mut self, map: &M) -> PathFinderState<R> {
         if self.state != PathFinderState::Computing {
             return self.state.clone();
         }

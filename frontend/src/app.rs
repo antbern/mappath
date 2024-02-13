@@ -1,27 +1,50 @@
-use crate::context::{Context};
+use crate::context::Context;
 use crate::event::{ButtonId, Event};
+use crate::App;
 
-use optimize::{CellStorage, Map, MapStorage, PathFinder, PathFinderState, Point, Visited};
+use optimize::{parse_img, Map, MapTrait, PathFinder, Point, Visited};
+use optimize::{MapStorage, PathFinderState};
+use wasm_bindgen::Clamped;
 use web_sys::CanvasRenderingContext2d;
+use web_sys::ImageData;
 
-pub trait App {
-    fn render(&mut self, ctx: &Context, rendering_ctx: &CanvasRenderingContext2d);
+pub struct AppImpl<M: MapTrait> {
+    pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
+    map: M,
 }
 
-pub struct AppImpl<S: MapStorage<Visited<Point>, Reference = Point>> {
-    // image_data: ImageData,
-    // pathfinder: PathFinder<Point, CellStorage<Visited<Point>>>,
-    pub pathfinder: PathFinder<Point, S>,
-    pub map: Map,
-}
+impl AppImpl<Map> {
+    pub fn new(_context: &Context) -> Self {
+        // load the image by including the bytes in the compilation
+        let image_bytes = include_bytes!("../../data/maze-03_6_threshold.png");
+        let image = image::load_from_memory(image_bytes).expect("could not load image");
 
-impl<S: MapStorage<Visited<Point>, Reference = Point>> AppImpl<S> {
-    pub fn new(pathfinder: PathFinder<Point, S>, map: Map) -> Self {
-        Self { pathfinder, map }
+        let rgba_image = image.to_rgba8();
+
+        let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
+        let _image_data_temp =
+            ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())
+                .unwrap();
+
+        let map = parse_img(&image).unwrap();
+
+        // let mut map = create_basic_map();
+        // map.cells[3][2] = Cell::Cost(4);
+
+        let finder = PathFinder::new(
+            Point { row: 14, col: 0 },
+            Point { row: 44, col: 51 },
+            map.create_storage::<Visited<Point>>(),
+        );
+
+        Self {
+            pathfinder: finder,
+            map,
+        }
     }
 }
 
-impl<S: MapStorage<Visited<Point>, Reference = Point>> App for AppImpl<S> {
+impl App for AppImpl<Map> {
     fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
@@ -62,12 +85,7 @@ impl<S: MapStorage<Visited<Point>, Reference = Point>> App for AppImpl<S> {
         ctx.set_fill_style(&"00FFFF".into());
         ctx.fill_rect(start.col as f64 * size, start.row as f64 * size, size, size);
 
-        let visited = self
-            .pathfinder
-            .get_visited()
-            .as_any()
-            .downcast_ref::<CellStorage<Visited<Point>>>()
-            .unwrap();
+        let visited = self.pathfinder.get_visited();
 
         for row in 0..self.map.rows {
             for col in 0..self.map.columns {

@@ -18,14 +18,6 @@ fn main() -> Result<(), anyhow::Error> {
     .finish(&map);
 
     dbg!(res);
-
-    // a bit hacky for now to get the visited storage back into the concrete type
-    // TODO: might help to have the reference type as generic argument to the map instead...
-    let visited = visited
-        .as_any()
-        .downcast_ref::<CellStorage<Visited<Point>>>()
-        .expect("Wasn't a CellStorage<Visited<Point>>!");
-
     println!("{}", visited);
 
     Ok(())
