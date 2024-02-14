@@ -66,6 +66,16 @@ pub struct Map {
     pub cells: Vec<Vec<Cell>>,
 }
 
+impl Map {
+    pub fn new(rows: usize, columns: usize) -> Self {
+        Self {
+            rows,
+            columns,
+            cells: vec![vec![Cell::Valid; columns]; rows],
+        }
+    }
+}
+
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
 // TODO: change from vec of vec to one single vec -> better cache friendlyness!
 #[derive(Debug)]

@@ -3,7 +3,7 @@ use crate::event::{ButtonId, Event, MouseButton};
 use crate::App;
 
 use log::debug;
-use optimize::{parse_img, Map, MapTrait, PathFinder, Point, Visited};
+use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
 use wasm_bindgen::Clamped;
 use web_sys::CanvasRenderingContext2d;
@@ -11,11 +11,18 @@ use web_sys::ImageData;
 
 pub struct AppImpl<M: MapTrait> {
     mode: Mode,
-    pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
-    map: M,
-    start: M::Reference,
-    goal: M::Reference,
+    rows: usize,
+    cols: usize,
     size: f64,
+    map: M,
+
+    find_state: Option<FindState<M>>,
+    start: Option<M::Reference>,
+    goal: Option<M::Reference>,
+}
+
+struct FindState<M: MapTrait> {
+    pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
 }
 
 enum Mode {
@@ -26,36 +33,17 @@ enum Mode {
 
 impl AppImpl<Map> {
     pub fn new(context: &Context) -> Self {
-        // load the image by including the bytes in the compilation
-        let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
-        let image = image::load_from_memory(image_bytes).expect("could not load image");
-
-        let rgba_image = image.to_rgba8();
-
-        let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
-        let _image_data_temp =
-            ImageData::new_with_u8_clamped_array_and_sh(clamped_buf, image.width(), image.height())
-                .unwrap();
-
-        let map = parse_img(&image).unwrap();
-
-        // let mut map = create_basic_map();
-        // map.cells[3][2] = Cell::Cost(4);
-
-        let start = Point { row: 14, col: 0 };
-        let goal = Point { row: 44, col: 51 };
-
-        let finder = PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
-
         let mut s = Self {
             mode: Mode::Setup,
-            pathfinder: finder,
-            map,
-            start,
-            goal,
+            rows: 10,
+            cols: 10,
+            map: Map::new(10, 10),
             size: 10.0,
+            find_state: None,
+            start: None,
+            goal: None,
         };
-        s.enter_mode(Mode::Setup, context);
+        s.enter_mode(Mode::Edit, context);
         s
     }
 }
@@ -78,6 +66,37 @@ impl AppImpl<Map> {
             Event::ButtonPressed(ButtonId::ModeEdit) => self.enter_mode(Mode::Edit, context),
             Event::ButtonPressed(ButtonId::ModePathFind) => {
                 self.enter_mode(Mode::PathFind, context)
+            }
+            Event::ButtonPressed(ButtonId::LoadPreset) => {
+                // load the image by including the bytes in the compilation
+                let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
+                let image = image::load_from_memory(image_bytes).expect("could not load image");
+
+                let rgba_image = image.to_rgba8();
+
+                let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
+                let _image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
+                    clamped_buf,
+                    image.width(),
+                    image.height(),
+                )
+                .unwrap();
+
+                let map = parse_img(&image).unwrap();
+
+                // let mut map = create_basic_map();
+                // map.cells[3][2] = Cell::Cost(4);
+
+                let start = Point { row: 14, col: 0 };
+                let goal = Point { row: 44, col: 51 };
+
+                let finder = PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
+
+                self.rows = map.rows;
+                self.cols = map.columns;
+                self.map = map;
+
+                self.find_state = Some(FindState { pathfinder: finder });
             }
             _ => {}
         }
@@ -108,6 +127,8 @@ impl AppImpl<Map> {
                 context.show_div("mode-setup-inputs", false);
                 context.show_div("mode-edit-inputs", true);
                 context.show_div("mode-find-inputs", false);
+
+                // TODO: sync the input fields with the current settings
             }
             Mode::PathFind => {
                 context.enable_button(ButtonId::ModeSetup, true);
@@ -125,21 +146,41 @@ impl AppImpl<Map> {
     fn handle_event_edit(&mut self, event: Event, context: &Context) {}
 
     fn handle_event_path_find(&mut self, event: Event, context: &Context) {
+        // if self.find_state.is_none() {
+        //     self.find_state = Some(FindState {
+        //         pathfinder: PathFinder::new(
+        //             self.start,
+        //             self.goal,
+        //             self.map.create_storage::<Visited<Point>>(),
+        //         ),
+        //         start: self.start,
+        //         goal: self.goal,
+        //     });
+        // }
+
         match event {
             Event::ButtonPressed(ButtonId::Reset) => {
-                self.pathfinder = PathFinder::new(
-                    self.start,
-                    self.goal,
-                    self.map.create_storage::<Visited<Point>>(),
-                );
+                if let (Some(start), Some(goal)) = (self.start, self.goal) {
+                    self.find_state = Some(FindState {
+                        pathfinder: PathFinder::new(
+                            start,
+                            goal,
+                            self.map.create_storage::<Visited<Point>>(),
+                        ),
+                    });
+                }
             }
             Event::ButtonPressed(ButtonId::Step) => {
-                self.pathfinder.step(&self.map);
+                if let Some(pathfinder) = &mut self.find_state {
+                    pathfinder.pathfinder.step(&self.map);
+                }
             }
             Event::ButtonPressed(ButtonId::Finish) => loop {
-                match self.pathfinder.step(&self.map) {
-                    PathFinderState::Computing => {}
-                    _s => break,
+                if let Some(pathfinder) = &mut self.find_state {
+                    match pathfinder.pathfinder.step(&self.map) {
+                        PathFinderState::Computing => {}
+                        _s => break,
+                    }
                 }
             },
 
@@ -148,22 +189,32 @@ impl AppImpl<Map> {
                 let col = (x as f64 / self.size) as usize;
 
                 match button {
-                    MouseButton::Main => self.start = Point { row, col },
-                    MouseButton::Secondary => self.goal = Point { row, col },
+                    MouseButton::Main => self.start = Some(Point { row, col }),
+                    MouseButton::Secondary => self.goal = Some(Point { row, col }),
                     _ => {}
                 }
                 debug!("{:?} -> {:?}", self.start, self.goal);
-                self.pathfinder = PathFinder::new(
-                    self.start,
-                    self.goal,
-                    self.map.create_storage::<Visited<Point>>(),
-                );
+                if let (Some(start), Some(goal)) = (self.start, self.goal) {
+                    self.find_state = Some(FindState {
+                        pathfinder: PathFinder::new(
+                            start,
+                            goal,
+                            self.map.create_storage::<Visited<Point>>(),
+                        ),
+                    });
+                }
             }
             _ => {}
         }
     }
 
     fn render_app(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
+        let canvas = ctx.canvas().unwrap();
+        canvas.set_width((self.map.columns as f64 * self.size) as u32);
+        canvas.set_height((self.map.rows as f64 * self.size) as u32);
+        ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        ctx.scale(self.size, self.size).unwrap();
+
         // render based on the current mode
         match self.mode {
             Mode::Setup => self.render_app_setup(context, ctx),
@@ -172,36 +223,15 @@ impl AppImpl<Map> {
         }
     }
 
-    fn render_app_setup(&self, context: &Context, ctx: &CanvasRenderingContext2d) {}
+    fn render_map(&self, _context: &Context, ctx: &CanvasRenderingContext2d) {
+        // if we have a path state, color the cells based on the pathfinder state
+        let color_func = move |cell, p: &Point| -> String {
+            if let Some(state) = &self.find_state {
+                let visited = state.pathfinder.get_visited();
 
-    fn render_app_edit(&self, context: &Context, ctx: &CanvasRenderingContext2d) {}
+                let v = visited.get(*p);
 
-    fn render_app_find(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
-        // render the app
-        context.set_output("");
-
-        let canvas = ctx.canvas().unwrap();
-
-        let size = self.size;
-
-        canvas.set_width((self.map.columns as f64 * size) as u32);
-        canvas.set_height((self.map.rows as f64 * size) as u32);
-        ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
-        ctx.scale(size, size).unwrap();
-
-        // draw the cells of the map
-
-        let visited = self.pathfinder.get_visited();
-
-        for row in 0..self.map.rows {
-            for col in 0..self.map.columns {
-                let cell = self.map.cells[row][col];
-
-                let r = Point { row, col };
-
-                let v = visited.get(r);
-
-                let color = match (cell, *v) {
+                match (cell, *v) {
                     (optimize::Cell::Invalid, _) => "#000000".into(),
                     (optimize::Cell::Valid, Some(f)) => {
                         format!("rgb({}, 0.0, 0.0)", f.cost)
@@ -209,54 +239,91 @@ impl AppImpl<Map> {
                     (optimize::Cell::Cost(_), Some(_)) => "#FFFF00".into(),
                     (optimize::Cell::Valid, _) => "#FFFFFF".into(),
                     (optimize::Cell::Cost(_), _) => "#FF0000".into(),
-                };
+                }
+            } else {
+                match cell {
+                    Cell::Invalid => "#000000".into(),
+                    Cell::Valid => "#FFFFFF".into(),
+                    Cell::Cost(_) => "#FFFF00".into(),
+                }
+            }
+        };
+
+        for row in 0..self.map.rows {
+            for col in 0..self.map.columns {
+                let cell = self.map.cells[row][col];
+
+                //
+                let color = color_func(cell, &Point { row, col });
 
                 ctx.set_fill_style(&color.into());
 
                 ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
             }
         }
+    }
 
-        ctx.set_fill_style(&"#00FF00".into());
-        ctx.fill_rect(self.goal.col as f64, self.goal.row as f64, 1.0, 1.0);
+    fn render_app_setup(&self, context: &Context, ctx: &CanvasRenderingContext2d) {}
 
-        ctx.set_fill_style(&"#0000FF".into());
-        ctx.fill_rect(self.start.col as f64, self.start.row as f64, 1.0, 1.0);
+    fn render_app_edit(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
+        self.render_map(context, ctx);
+    }
 
-        match self.pathfinder.state() {
-            PathFinderState::Computing => {}
-            PathFinderState::NoPathFound => {
-                context.set_output("No path found");
-            }
-            PathFinderState::PathFound(pr) => {
-                ctx.set_stroke_style(&"#FFFFFF".into());
-                ctx.set_line_width(1.0 / size);
-                ctx.begin_path();
-                ctx.move_to(pr.start.col as f64 + 0.5, pr.start.row as f64 + 0.5);
-                for p in &pr.path {
-                    ctx.line_to(p.col as f64 + 0.5, p.row as f64 + 0.5);
-                }
+    fn render_app_find(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
+        // render the app
+        context.set_output("");
 
-                ctx.move_to(pr.goal.col as f64 + 0.5, pr.goal.row as f64 + 0.5);
+        // draw the cells of the map
+        self.render_map(context, ctx);
 
-                ctx.stroke();
-            }
+        if let Some(goal) = self.goal {
+            ctx.set_fill_style(&"#FF0000".into());
+            ctx.fill_rect(goal.col as f64, goal.row as f64, 1.0, 1.0);
         }
 
-        // get the cell the user is hovering
-        if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
-            let row = (y as f64 / size) as usize;
-            let col = (x as f64 / size) as usize;
-
+        if let Some(start) = self.start {
             ctx.set_fill_style(&"#00FF00".into());
-            ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
+            ctx.fill_rect(start.col as f64, start.row as f64, 1.0, 1.0);
+        }
 
-            let v = visited.get(Point { row, col });
+        if let Some(state) = &self.find_state {
+            let visited = state.pathfinder.get_visited();
 
-            context.set_output(&format!(
-                "Cell @{row}:{col}\n{:?}\n\n{:?}",
-                self.map.cells[row][col], v
-            ));
+            match state.pathfinder.state() {
+                PathFinderState::Computing => {}
+                PathFinderState::NoPathFound => {
+                    context.set_output("No path found");
+                }
+                PathFinderState::PathFound(pr) => {
+                    ctx.set_stroke_style(&"#FFFFFF".into());
+                    ctx.set_line_width(1.0 / self.size);
+                    ctx.begin_path();
+                    ctx.move_to(pr.start.col as f64 + 0.5, pr.start.row as f64 + 0.5);
+                    for p in &pr.path {
+                        ctx.line_to(p.col as f64 + 0.5, p.row as f64 + 0.5);
+                    }
+
+                    ctx.move_to(pr.goal.col as f64 + 0.5, pr.goal.row as f64 + 0.5);
+
+                    ctx.stroke();
+                }
+            }
+
+            // get the cell the user is hovering
+            if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
+                let row = (y as f64 / self.size) as usize;
+                let col = (x as f64 / self.size) as usize;
+
+                ctx.set_fill_style(&"#00FF00".into());
+                ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
+
+                let v = visited.get(Point { row, col });
+
+                context.set_output(&format!(
+                    "Cell @{row}:{col}\n{:?}\n\n{:?}",
+                    self.map.cells[row][col], v
+                ));
+            }
         }
     }
 }

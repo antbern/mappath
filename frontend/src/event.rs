@@ -20,6 +20,7 @@ pub enum ButtonId {
     ModeSetup,
     ModeEdit,
     ModePathFind,
+    LoadPreset,
 }
 
 impl ButtonId {
@@ -32,6 +33,7 @@ impl ButtonId {
             ButtonId::ModeSetup => "btn-mode-setup",
             ButtonId::ModeEdit => "btn-mode-edit",
             ButtonId::ModePathFind => "btn-mode-find",
+            ButtonId::LoadPreset => "btn-load-preset",
         }
     }
 
@@ -44,6 +46,7 @@ impl ButtonId {
             ButtonId::ModeSetup,
             ButtonId::ModeEdit,
             ButtonId::ModePathFind,
+            ButtonId::LoadPreset,
         ]
         .iter()
         .copied()
