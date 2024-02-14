@@ -97,16 +97,25 @@ impl AppImpl<Map> {
                 context.enable_button(ButtonId::ModeSetup, false);
                 context.enable_button(ButtonId::ModeEdit, true);
                 context.enable_button(ButtonId::ModePathFind, true);
+                context.show_div("mode-setup-inputs", true);
+                context.show_div("mode-edit-inputs", false);
+                context.show_div("mode-find-inputs", false);
             }
             Mode::Edit => {
                 context.enable_button(ButtonId::ModeSetup, true);
                 context.enable_button(ButtonId::ModeEdit, false);
                 context.enable_button(ButtonId::ModePathFind, true);
+                context.show_div("mode-setup-inputs", false);
+                context.show_div("mode-edit-inputs", true);
+                context.show_div("mode-find-inputs", false);
             }
             Mode::PathFind => {
                 context.enable_button(ButtonId::ModeSetup, true);
                 context.enable_button(ButtonId::ModeEdit, true);
                 context.enable_button(ButtonId::ModePathFind, false);
+                context.show_div("mode-setup-inputs", false);
+                context.show_div("mode-edit-inputs", false);
+                context.show_div("mode-find-inputs", true);
             }
         }
     }

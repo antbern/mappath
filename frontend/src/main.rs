@@ -216,14 +216,14 @@ fn main() -> Result<(), JsValue> {
         });
     }
 
-    {
-        let context = context.clone();
-        let request_repaint = request_repaint.clone();
-        register_change_event("select-mode", move |select: &web_sys::HtmlSelectElement| {
-            context.push_event(Event::SelectChanged(SelectId::Mode, select.value()));
-            request_repaint();
-        });
-    }
+    // {
+    //     let context = context.clone();
+    //     let request_repaint = request_repaint.clone();
+    //     register_change_event("select-mode", move |select: &web_sys::HtmlSelectElement| {
+    //         context.push_event(Event::SelectChanged(SelectId::Mode, select.value()));
+    //         request_repaint();
+    //     });
+    // }
     // {
     //     let context = context.clone();
     //     let request_repaint = request_repaint.clone();

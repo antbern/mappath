@@ -2,7 +2,9 @@ use log::debug;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
+use wasm_bindgen::JsCast;
 use web_sys::Document;
+use web_sys::HtmlDivElement;
 use web_sys::HtmlPreElement;
 
 use crate::event::ButtonId;
@@ -54,6 +56,22 @@ impl Context {
                 button.set_attribute("disabled", "").unwrap();
             } else {
                 button.remove_attribute("disabled").unwrap();
+            }
+        });
+    }
+    /// Shows or hides a div element
+    pub fn show_div(&self, div_id: &str, show: bool) {
+        self.write(|inner| {
+            let div: HtmlDivElement = inner
+                .document
+                .get_element_by_id(div_id)
+                .unwrap()
+                .dyn_into::<web_sys::HtmlDivElement>()
+                .unwrap();
+            if show {
+                div.style().remove_property("display").unwrap();
+            } else {
+                div.style().set_property("display", "none").unwrap();
             }
         });
     }

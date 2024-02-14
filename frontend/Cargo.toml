@@ -31,4 +31,6 @@ features = [
   'MouseEvent',
   'HtmlPreElement',
   'HtmlSelectElement',
+  'CssStyleDeclaration',
+  'HtmlDivElement',
 ]
