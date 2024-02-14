@@ -5,9 +5,7 @@ use context::{Context, ContextImpl, Input};
 use event::{ButtonId, SelectId};
 use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
-use web_sys::{
-    CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement
-};
+use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
 
 use crate::event::Event;
 
@@ -20,13 +18,9 @@ pub trait App {
     fn render(&mut self, ctx: &Context, rendering_ctx: &CanvasRenderingContext2d);
 }
 
-fn register_onclick<T: FnMut() -> () + 'static>(document: &Document, id: &str, callback: T) {
+fn register_onclick<T: FnMut() -> () + 'static>(id: &str, callback: T) {
     let closure_btn_clone = Closure::<dyn FnMut()>::new(callback);
-    document
-        .get_element_by_id(id)
-        .expect("should have btn-reset on the page")
-        .dyn_ref::<HtmlElement>()
-        .expect("#btn-reset be an `HtmlElement`")
+    get_element_by_id::<HtmlElement>(id)
         .set_onclick(Some(closure_btn_clone.as_ref().unchecked_ref()));
 
     // See comments https://rustwasm.github.io/wasm-bindgen/examples/closures.html
@@ -110,17 +104,8 @@ fn main() -> Result<(), JsValue> {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
 
-    // Use `web_sys`'s global `window` function to get a handle on the global
-    // window object.
-    let window = web_sys::window().expect("no global `window` exists");
-    let document = window.document().expect("should have a document on window");
 
-    let canvas = document.get_element_by_id("canvas").unwrap();
-    let canvas: web_sys::HtmlCanvasElement = canvas
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .map_err(|_| ())
-        .unwrap();
-
+    let canvas = get_element_by_id::<HtmlCanvasElement>("canvas");
     let rendering_context = canvas
         .get_context("2d")
         .unwrap()
@@ -128,11 +113,7 @@ fn main() -> Result<(), JsValue> {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    let output = document.get_element_by_id("output").unwrap();
-    let output: web_sys::HtmlPreElement = output
-        .dyn_into::<web_sys::HtmlPreElement>()
-        .map_err(|_| ())
-        .unwrap();
+    let output = get_element_by_id::<web_sys::HtmlPreElement>("output");
 
     // setup the context for the app to interact with the world
     let context = Context::new(ContextImpl {
@@ -229,7 +210,7 @@ fn main() -> Result<(), JsValue> {
     for button in ButtonId::iterate() {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-        register_onclick(&document, button.id_str(), move || {
+        register_onclick(button.id_str(), move || {
             context.push_event(Event::ButtonPressed(button));
             request_repaint();
         });
