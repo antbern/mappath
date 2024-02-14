@@ -261,6 +261,20 @@ impl AppImpl<Map> {
                 ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
             }
         }
+
+        // draw lines between all the cells
+        ctx.set_stroke_style(&"#000000".into());
+        ctx.set_line_width(1.0 / self.size);
+        ctx.begin_path();
+        for row in 0..=self.map.rows {
+            ctx.move_to(0.0, row as f64);
+            ctx.line_to(self.map.columns as f64, row as f64);
+        }
+        for col in 0..=self.map.columns {
+            ctx.move_to(col as f64, 0.0);
+            ctx.line_to(col as f64, self.map.rows as f64);
+        }
+        ctx.stroke();
     }
 
     fn render_app_setup(&self, context: &Context, ctx: &CanvasRenderingContext2d) {}
