@@ -2,8 +2,10 @@ use log::debug;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
+use web_sys::Document;
 use web_sys::HtmlPreElement;
 
+use crate::event::ButtonId;
 use crate::event::Event;
 
 #[derive(Clone)]
@@ -40,6 +42,20 @@ impl Context {
 impl Context {
     pub fn set_output(&self, output: &str) {
         self.write(|inner| inner.output.set_inner_text(output));
+    }
+
+    pub fn enable_button(&self, button_id: ButtonId, enabled: bool) {
+        self.write(|inner| {
+            let button = inner
+                .document
+                .get_element_by_id(button_id.id_str())
+                .unwrap();
+            if !enabled {
+                button.set_attribute("disabled", "").unwrap();
+            } else {
+                button.remove_attribute("disabled").unwrap();
+            }
+        });
     }
 
     pub fn input<R>(&self, f: impl FnOnce(&Input) -> R) -> R {
@@ -100,6 +116,7 @@ impl Input {
     }
 }
 pub struct ContextImpl {
+    pub document: Document,
     pub output: HtmlPreElement,
     pub input: Input,
     pub events: VecDeque<Event>,

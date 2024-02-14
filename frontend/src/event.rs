@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[derive(Debug, Clone )]
+#[derive(Debug, Clone)]
 pub enum Event {
     ButtonPressed(ButtonId),
     SelectChanged(SelectId, String),
@@ -17,6 +17,9 @@ pub enum ButtonId {
     Reset,
     Step,
     Finish,
+    ModeSetup,
+    ModeEdit,
+    ModePathFind,
 }
 
 impl ButtonId {
@@ -26,14 +29,24 @@ impl ButtonId {
             ButtonId::Reset => "btn-reset",
             ButtonId::Step => "btn-step",
             ButtonId::Finish => "btn-finish",
+            ButtonId::ModeSetup => "btn-mode-setup",
+            ButtonId::ModeEdit => "btn-mode-edit",
+            ButtonId::ModePathFind => "btn-mode-find",
         }
     }
 
     /// iterates over all button ids
     pub fn iterate() -> impl Iterator<Item = ButtonId> {
-        [ButtonId::Reset, ButtonId::Step, ButtonId::Finish]
-            .iter()
-            .copied()
+        [
+            ButtonId::Reset,
+            ButtonId::Step,
+            ButtonId::Finish,
+            ButtonId::ModeSetup,
+            ButtonId::ModeEdit,
+            ButtonId::ModePathFind,
+        ]
+        .iter()
+        .copied()
     }
 }
 
@@ -72,5 +85,3 @@ enum Widget {
     Select(SelectId),
     // Checkbox(CheckboxId),
 }
-
-

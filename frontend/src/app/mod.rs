@@ -71,6 +71,11 @@ impl App for AppImpl<Map> {
                         _s => break,
                     }
                 },
+                Event::ButtonPressed(ButtonId::ModeSetup) => {
+                    context.enable_button(ButtonId::ModeSetup, false);
+                    context.enable_button(ButtonId::ModeEdit, true);
+                    context.enable_button(ButtonId::ModePathFind, true);
+                }
                 Event::MouseReleased { x, y, button } => {
                     let row = (y as f64 / self.size) as usize;
                     let col = (x as f64 / self.size) as usize;

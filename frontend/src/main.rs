@@ -104,7 +104,6 @@ fn main() -> Result<(), JsValue> {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
 
-
     let canvas = get_element_by_id::<HtmlCanvasElement>("canvas");
     let rendering_context = canvas
         .get_context("2d")
@@ -117,6 +116,7 @@ fn main() -> Result<(), JsValue> {
 
     // setup the context for the app to interact with the world
     let context = Context::new(ContextImpl {
+        document: document(),
         output,
         input: Input::default(),
         events: VecDeque::new(),
@@ -224,6 +224,18 @@ fn main() -> Result<(), JsValue> {
             request_repaint();
         });
     }
+    // {
+    //     let context = context.clone();
+    //     let request_repaint = request_repaint.clone();
+    //     register_change_event(
+    //         "select-mode-radio",
+    //         move |select: &web_sys::HtmlSelectElement| {
+    //             context.push_event(Event::SelectChanged(SelectId::Mode, select.value()));
+    //             request_repaint();
+    //         },
+    //     );
+    // }
+
     // register animation frame function
     //
     // create a closure that will be called by the browser's animation frame
