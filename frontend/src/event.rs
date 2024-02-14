@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone )]
 pub enum Event {
     ButtonPressed(ButtonId),
+    SelectChanged(SelectId, String),
     MouseMove { x: i32, y: i32 },
     MouseEnter { x: i32, y: i32 },
     MouseLeave,
@@ -54,3 +55,22 @@ impl MouseButton {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectId {
+    Mode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Edit,
+    PathFind,
+}
+
+enum Widget {
+    Button(ButtonId),
+    Select(SelectId),
+    // Checkbox(CheckboxId),
+}
+
+

@@ -2,10 +2,12 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
 use context::{Context, ContextImpl, Input};
-use event::ButtonId;
+use event::{ButtonId, SelectId};
 use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
+use web_sys::{
+    CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement
+};
 
 use crate::event::Event;
 
@@ -31,6 +33,18 @@ fn register_onclick<T: FnMut() -> () + 'static>(document: &Document, id: &str, c
     closure_btn_clone.forget();
 }
 
+/// register a change event on an element (e.g. any input element)
+fn register_change_event<E: JsCast, T: FnMut(&E) -> () + 'static>(id: &str, mut callback: T) {
+    let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let element = event.current_target().unwrap().dyn_into::<E>().unwrap();
+        callback(&element);
+    });
+    get_element_by_id::<web_sys::EventTarget>(id)
+        .add_event_listener_with_callback("change", closure.as_ref().unchecked_ref())
+        .unwrap();
+
+    closure.forget();
+}
 fn register_canvas_event<T: FnMut(web_sys::MouseEvent) -> () + 'static>(
     canvas: &HtmlCanvasElement,
     event: &str,
@@ -67,6 +81,24 @@ fn create_basic_map() -> Map {
 }
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
+}
+
+fn document() -> Document {
+    window()
+        .document()
+        .expect("should have a document on window")
+}
+
+fn get_element_by_id<T: JsCast>(id: &str) -> T {
+    document()
+        .get_element_by_id(id)
+        .expect(&format!("should have {} on the page", id))
+        .dyn_into::<T>()
+        .expect(&format!(
+            "{} should be an `{}`",
+            id,
+            std::any::type_name::<T>()
+        ))
 }
 
 fn request_animation_frame(f: &Closure<dyn FnMut()>) {
@@ -203,6 +235,14 @@ fn main() -> Result<(), JsValue> {
         });
     }
 
+    {
+        let context = context.clone();
+        let request_repaint = request_repaint.clone();
+        register_change_event("select-mode", move |select: &web_sys::HtmlSelectElement| {
+            context.push_event(Event::SelectChanged(SelectId::Mode, select.value()));
+            request_repaint();
+        });
+    }
     // register animation frame function
     //
     // create a closure that will be called by the browser's animation frame

@@ -52,7 +52,7 @@ impl Context {
     pub fn push_event(&self, event: Event) {
         self.write(|inner| {
             debug!("pushing event: {:?}", event);
-            inner.events.push_back(event);
+            inner.events.push_back(event.clone());
             inner.input.on_event(event);
         });
     }
