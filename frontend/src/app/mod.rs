@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::event::{ButtonId, Event, MouseButton};
+use crate::event::{ButtonId, CheckboxId, Event, MouseButton};
 use crate::App;
 
 use log::debug;
@@ -19,6 +19,7 @@ pub struct AppImpl<M: MapTrait> {
     find_state: Option<FindState<M>>,
     start: Option<M::Reference>,
     goal: Option<M::Reference>,
+    auto_step: bool,
 }
 
 struct FindState<M: MapTrait> {
@@ -36,6 +37,7 @@ impl AppImpl<Map> {
             find_state: None,
             start: None,
             goal: None,
+            auto_step: true,
         };
         s.set_editing(false, context);
         s
@@ -59,7 +61,32 @@ impl AppImpl<Map> {
         // switch mode if the mode buttons were pressed
         match event {
             Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
-                    Event::ButtonPressed(ButtonId::LoadPreset) => {
+            Event::CheckboxChanged(CheckboxId::AutoStep, checked) => self.auto_step = checked,
+            _ => {}
+        }
+        // handle the event depending on the current mode
+        if self.editing {
+            self.handle_event_edit(event, context);
+        } else {
+            self.handle_event_path_find(event, context);
+        }
+    }
+
+    fn set_editing(&mut self, editing: bool, context: &Context) {
+        //
+        self.editing = editing;
+        if self.editing {
+            // enable the edit inputs
+            context.enable_element("edit-inputs", true);
+        } else {
+            // disable the edit inputs
+            context.enable_element("edit-inputs", false);
+        }
+    }
+
+    fn handle_event_edit(&mut self, event: Event, context: &Context) {
+        match event {
+            Event::ButtonPressed(ButtonId::LoadPreset) => {
                 // load the image by including the bytes in the compilation
                 let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
                 let image = image::load_from_memory(image_bytes).expect("could not load image");
@@ -92,27 +119,7 @@ impl AppImpl<Map> {
             }
             _ => {}
         }
-        // handle the event depending on the current mode
-        if self.editing {
-            self.handle_event_edit(event, context);
-        } else {
-            self.handle_event_path_find(event, context);
-        }
     }
-
-    fn set_editing(&mut self, editing: bool, context: &Context) {
-        //
-        self.editing = editing;
-        if self.editing {
-            // enable the edit inputs
-            context.enable_element("edit-inputs", true);
-        } else {
-            // disable the edit inputs
-            context.enable_element("edit-inputs", false);
-        }
-    }
-
-    fn handle_event_edit(&mut self, event: Event, context: &Context) {}
 
     fn handle_event_path_find(&mut self, event: Event, context: &Context) {
         match event {
@@ -165,7 +172,7 @@ impl AppImpl<Map> {
         }
     }
 
-    fn render_app(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
+    fn render_app(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         let canvas = ctx.canvas().unwrap();
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
         ctx.save();
@@ -178,6 +185,20 @@ impl AppImpl<Map> {
         if self.editing {
             self.render_app_edit(context, ctx);
         } else {
+            // autostep if autostep is enabled and we still have steps to complete
+            if self.auto_step {
+                if let Some(pathfinder) = &mut self.find_state {
+                    for _ in 0..5 {
+                        match pathfinder.pathfinder.step(&self.map) {
+                            PathFinderState::Computing => {
+                                // request another animation frame
+                                context.request_repaint();
+                            }
+                            _ => break,
+                        }
+                    }
+                }
+            }
             self.render_app_find(context, ctx);
         }
 

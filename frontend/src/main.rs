@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
 use context::{Context, ContextImpl, Input};
-use event::ButtonId;
+use event::{ButtonId, CheckboxId};
 use log::debug;
 use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
@@ -237,14 +237,17 @@ fn main() -> Result<(), JsValue> {
         });
     }
 
-    // {
-    //     let context = context.clone();
-    //     let request_repaint = request_repaint.clone();
-    //     register_change_event("select-mode", move |select: &web_sys::HtmlSelectElement| {
-    //         context.push_event(Event::SelectChanged(SelectId::Mode, select.value()));
-    //         request_repaint();
-    //     });
-    // }
+    {
+        let context = context.clone();
+        let request_repaint = request_repaint.clone();
+        register_change_event(
+            "input-auto-step",
+            move |element: &web_sys::HtmlInputElement| {
+                context.push_event(Event::CheckboxChanged(CheckboxId::AutoStep, element.checked() ));
+                request_repaint();
+            },
+        );
+    }
     // {
     //     let context = context.clone();
     //     let request_repaint = request_repaint.clone();
@@ -268,10 +271,12 @@ fn main() -> Result<(), JsValue> {
         let mut app = AppImpl::new(&context);
 
         move || {
+            debug!("redraw");
             app.render(&context, &rendering_context);
 
             // if the app requested to be repainted, schedule another call
             if context.is_repaint_requested() {
+                debug!("repaint requested");
                 request_repaint();
             }
         }

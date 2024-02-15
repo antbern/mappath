@@ -4,6 +4,7 @@
 pub enum Event {
     ButtonPressed(ButtonId),
     SelectChanged(SelectId, String),
+    CheckboxChanged(CheckboxId, bool),
     MouseMove { x: i32, y: i32 },
     MouseEnter { x: i32, y: i32 },
     MouseLeave,
@@ -73,14 +74,18 @@ pub enum SelectId {
     Mode,
 }
 
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    Edit,
-    PathFind,
+pub enum CheckboxId {
+    AutoStep,
 }
+
 
 enum Widget {
     Button(ButtonId),
     Select(SelectId),
     // Checkbox(CheckboxId),
 }
+
+
+
