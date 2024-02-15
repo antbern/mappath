@@ -17,9 +17,7 @@ pub enum ButtonId {
     Reset,
     Step,
     Finish,
-    ModeSetup,
-    ModeEdit,
-    ModePathFind,
+    ToggleEdit,
     LoadPreset,
 }
 
@@ -30,9 +28,7 @@ impl ButtonId {
             ButtonId::Reset => "btn-reset",
             ButtonId::Step => "btn-step",
             ButtonId::Finish => "btn-finish",
-            ButtonId::ModeSetup => "btn-mode-setup",
-            ButtonId::ModeEdit => "btn-mode-edit",
-            ButtonId::ModePathFind => "btn-mode-find",
+            ButtonId::ToggleEdit => "btn-mode-edit",
             ButtonId::LoadPreset => "btn-load-preset",
         }
     }
@@ -43,9 +39,9 @@ impl ButtonId {
             ButtonId::Reset,
             ButtonId::Step,
             ButtonId::Finish,
-            ButtonId::ModeSetup,
-            ButtonId::ModeEdit,
-            ButtonId::ModePathFind,
+            // ButtonId::ModeSetup,
+            ButtonId::ToggleEdit,
+            // ButtonId::ModePathFind,
             ButtonId::LoadPreset,
         ]
         .iter()

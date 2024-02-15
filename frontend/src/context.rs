@@ -59,6 +59,18 @@ impl Context {
             }
         });
     }
+
+    pub fn enable_element(&self, id: &str, enabled: bool) {
+        self.write(|inner| {
+            let element = inner.document.get_element_by_id(id).unwrap();
+            if !enabled {
+                element.set_attribute("disabled", "").unwrap();
+            } else {
+                element.remove_attribute("disabled").unwrap();
+            }
+        });
+    }
+
     /// Shows or hides a div element
     pub fn show_div(&self, div_id: &str, show: bool) {
         self.write(|inner| {

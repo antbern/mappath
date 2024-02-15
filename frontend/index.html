@@ -11,28 +11,25 @@
 	<div class="content">
 		<div class="row">
 			<div class="column-left">
-				<!-- <select id="select-mode"> -->
-				<!-- 	<option value="setup">Setup</option> -->
-				<!-- 	<option value="edit">Edit Cells</option> -->
-				<!-- 	<option value="find">Find Paths</option> -->
-				<!-- </select> -->
-				<button id="btn-load-preset">Load Preset</button>
-				<br />
+				<canvas id="canvas" oncontextmenu="return false;"></canvas>
+			</div>
+			<div class="column-right">
 
-				<div>
-					Mode
-					<button id="btn-mode-setup">0. Setup</button>
-					<button id="btn-mode-edit">1. Edit Cells</button>
-					<button id="btn-mode-find">2. Find Paths</button>
-				</div>
-				<div id="mode-setup-inputs">
-					Setup
-				</div>
-				<div id="mode-edit-inputs">
-					Edit
+
+				<button id="btn-mode-edit">Toggle Edit</button>
+
+				<fieldset id="edit-inputs">
+					<legend>Edit</legend>
 					Rows: <input type="number" id="input-rows"> <br>
 					Columns: <input type="number" id="input-cols"><br>
-				</div>
+
+					<button id="btn-load-preset">Load Preset</button>
+					<!-- 	<option value="setup">Setup</option> -->
+					<!-- <select id="select-mode"> -->
+					<!-- 	<option value="edit">Edit Cells</option> -->
+					<!-- 	<option value="find">Find Paths</option> -->
+					<!-- </select> -->
+				</fieldset>
 				<div id="mode-find-inputs">
 					<button id="btn-reset">Reset</button>
 					<button id="btn-step">Step</button>
@@ -46,8 +43,6 @@
 				<!-- <label for="select-mode-radio-find">2. Find Paths</label> -->
 				<br />
 				<canvas id="canvas" oncontextmenu="return false;"></canvas>
-			</div>
-			<div class="column-right">
 				<pre id="output"></pre>
 			</div>
 		</div>

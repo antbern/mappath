@@ -10,7 +10,7 @@ use web_sys::CanvasRenderingContext2d;
 use web_sys::ImageData;
 
 pub struct AppImpl<M: MapTrait> {
-    mode: Mode,
+    editing: bool,
     rows: usize,
     cols: usize,
     size: f64,
@@ -25,16 +25,10 @@ struct FindState<M: MapTrait> {
     pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
 }
 
-enum Mode {
-    Setup,
-    Edit,
-    PathFind,
-}
-
 impl AppImpl<Map> {
     pub fn new(context: &Context) -> Self {
         let mut s = Self {
-            mode: Mode::Setup,
+            editing: false,
             rows: 10,
             cols: 10,
             map: Map::new(10, 10),
@@ -43,7 +37,7 @@ impl AppImpl<Map> {
             start: None,
             goal: None,
         };
-        s.enter_mode(Mode::Edit, context);
+        s.set_editing(false, context);
         s
     }
 }
@@ -52,6 +46,8 @@ impl App for AppImpl<Map> {
     fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
+            // TODO: give the event to panning and zooming first, and if it was not handled, give it to the app
+
             self.handle_event(event, context);
         }
 
@@ -62,12 +58,8 @@ impl AppImpl<Map> {
     fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
-            Event::ButtonPressed(ButtonId::ModeSetup) => self.enter_mode(Mode::Setup, context),
-            Event::ButtonPressed(ButtonId::ModeEdit) => self.enter_mode(Mode::Edit, context),
-            Event::ButtonPressed(ButtonId::ModePathFind) => {
-                self.enter_mode(Mode::PathFind, context)
-            }
-            Event::ButtonPressed(ButtonId::LoadPreset) => {
+            Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
+                    Event::ButtonPressed(ButtonId::LoadPreset) => {
                 // load the image by including the bytes in the compilation
                 let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
                 let image = image::load_from_memory(image_bytes).expect("could not load image");
@@ -101,63 +93,28 @@ impl AppImpl<Map> {
             _ => {}
         }
         // handle the event depending on the current mode
-        match self.mode {
-            Mode::Setup => self.handle_event_setup(event, context),
-            Mode::Edit => self.handle_event_edit(event, context),
-            Mode::PathFind => self.handle_event_path_find(event, context),
+        if self.editing {
+            self.handle_event_edit(event, context);
+        } else {
+            self.handle_event_path_find(event, context);
         }
     }
 
-    fn enter_mode(&mut self, mode: Mode, context: &Context) {
-        self.mode = mode;
-        // enable the right buttons for the specific modes
-        match self.mode {
-            Mode::Setup => {
-                context.enable_button(ButtonId::ModeSetup, false);
-                context.enable_button(ButtonId::ModeEdit, true);
-                context.enable_button(ButtonId::ModePathFind, true);
-                context.show_div("mode-setup-inputs", true);
-                context.show_div("mode-edit-inputs", false);
-                context.show_div("mode-find-inputs", false);
-            }
-            Mode::Edit => {
-                context.enable_button(ButtonId::ModeSetup, true);
-                context.enable_button(ButtonId::ModeEdit, false);
-                context.enable_button(ButtonId::ModePathFind, true);
-                context.show_div("mode-setup-inputs", false);
-                context.show_div("mode-edit-inputs", true);
-                context.show_div("mode-find-inputs", false);
-
-                // TODO: sync the input fields with the current settings
-            }
-            Mode::PathFind => {
-                context.enable_button(ButtonId::ModeSetup, true);
-                context.enable_button(ButtonId::ModeEdit, true);
-                context.enable_button(ButtonId::ModePathFind, false);
-                context.show_div("mode-setup-inputs", false);
-                context.show_div("mode-edit-inputs", false);
-                context.show_div("mode-find-inputs", true);
-            }
+    fn set_editing(&mut self, editing: bool, context: &Context) {
+        //
+        self.editing = editing;
+        if self.editing {
+            // enable the edit inputs
+            context.enable_element("edit-inputs", true);
+        } else {
+            // disable the edit inputs
+            context.enable_element("edit-inputs", false);
         }
     }
-
-    fn handle_event_setup(&mut self, event: Event, context: &Context) {}
 
     fn handle_event_edit(&mut self, event: Event, context: &Context) {}
 
     fn handle_event_path_find(&mut self, event: Event, context: &Context) {
-        // if self.find_state.is_none() {
-        //     self.find_state = Some(FindState {
-        //         pathfinder: PathFinder::new(
-        //             self.start,
-        //             self.goal,
-        //             self.map.create_storage::<Visited<Point>>(),
-        //         ),
-        //         start: self.start,
-        //         goal: self.goal,
-        //     });
-        // }
-
         match event {
             Event::ButtonPressed(ButtonId::Reset) => {
                 if let (Some(start), Some(goal)) = (self.start, self.goal) {
@@ -214,11 +171,14 @@ impl AppImpl<Map> {
         ctx.save();
         ctx.scale(self.size, self.size).unwrap();
 
+        // TODO: implement panning and zooming to translate and scale the map further
+
         // render based on the current mode
-        match self.mode {
-            Mode::Setup => self.render_app_setup(context, ctx),
-            Mode::Edit => self.render_app_edit(context, ctx),
-            Mode::PathFind => self.render_app_find(context, ctx),
+
+        if self.editing {
+            self.render_app_edit(context, ctx);
+        } else {
+            self.render_app_find(context, ctx);
         }
 
         ctx.restore();
@@ -277,8 +237,6 @@ impl AppImpl<Map> {
         }
         ctx.stroke();
     }
-
-    fn render_app_setup(&self, context: &Context, ctx: &CanvasRenderingContext2d) {}
 
     fn render_app_edit(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
         self.render_map(context, ctx);
