@@ -206,40 +206,17 @@ impl AppImpl<Map> {
     }
 
     fn render_map(&self, _context: &Context, ctx: &CanvasRenderingContext2d) {
-        // if we have a path state, color the cells based on the pathfinder state
-        let color_func = move |cell, p: &Point| -> String {
-            if let Some(state) = &self.find_state {
-                let visited = state.pathfinder.get_visited();
-
-                let v = visited.get(*p);
-
-                match (cell, *v) {
-                    (optimize::Cell::Invalid, _) => "#000000".into(),
-                    (optimize::Cell::Valid, Some(f)) => {
-                        format!("rgb({}, 0.0, 0.0)", f.cost)
-                    }
-                    (optimize::Cell::Cost(_), Some(_)) => "#FFFF00".into(),
-                    (optimize::Cell::Valid, _) => "#FFFFFF".into(),
-                    (optimize::Cell::Cost(_), _) => "#FF0000".into(),
-                }
-            } else {
-                match cell {
-                    Cell::Invalid => "#000000".into(),
-                    Cell::Valid => "#FFFFFF".into(),
-                    Cell::Cost(_) => "#FFFF00".into(),
-                }
-            }
-        };
-
         for row in 0..self.map.rows {
             for col in 0..self.map.columns {
                 let cell = self.map.cells[row][col];
 
-                //
-                let color = color_func(cell, &Point { row, col });
+                let color: String = match cell {
+                    Cell::Invalid => "#000000".into(),
+                    Cell::Valid => "#FFFFFF".into(),
+                    Cell::Cost(_) => "#FFFF00".into(),
+                };
 
                 ctx.set_fill_style(&color.into());
-
                 ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
             }
         }
@@ -283,13 +260,32 @@ impl AppImpl<Map> {
         if let Some(state) = &self.find_state {
             let visited = state.pathfinder.get_visited();
 
+            let margin = 0.15;
+            for row in 0..self.map.rows {
+                for col in 0..self.map.columns {
+                    let p = Point { row, col };
+                    let v = visited.get(p);
+
+                    if let Some(f) = *v {
+                        let color = format!("rgba({}, 0.0, 0.0, 0.8)", f.cost);
+                        ctx.set_fill_style(&color.into());
+                        ctx.fill_rect(
+                            col as f64 + margin,
+                            row as f64 + margin,
+                            1.0 - 2.0 * margin,
+                            1.0 - 2.0 * margin,
+                        );
+                    }
+                }
+            }
+
             match state.pathfinder.state() {
                 PathFinderState::Computing => {}
                 PathFinderState::NoPathFound => {
                     context.set_output("No path found");
                 }
                 PathFinderState::PathFound(pr) => {
-                    ctx.set_stroke_style(&"#FFFFFF".into());
+                    ctx.set_stroke_style(&"#00FF00".into());
                     ctx.set_line_width(1.0 / self.size);
                     ctx.begin_path();
                     ctx.move_to(pr.start.col as f64 + 0.5, pr.start.row as f64 + 0.5);
