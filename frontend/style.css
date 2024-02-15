@@ -7,6 +7,23 @@
     display: flex;
 }
 
-.column {
-    flex: 50%;
+.column-left {
+    flex: 70%;
 }
+
+.column-right {
+	flex: 30%;
+}
+
+#canvas {
+	height: 600px;
+	width: 100%;
+	border: 1px solid #000;
+	object-fit: contain;
+}
+/* enable word wrap on all pre tags */
+pre {
+    white-space: pre-wrap;
+}
+
+

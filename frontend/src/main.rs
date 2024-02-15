@@ -2,7 +2,8 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
 use context::{Context, ContextImpl, Input};
-use event::{ButtonId, SelectId};
+use event::ButtonId;
+use log::debug;
 use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
@@ -103,6 +104,26 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 fn main() -> Result<(), JsValue> {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
+
+    // setup an event handler for window.onresize and scale the canvas based on it's
+    // clientWidth/clientHeight
+    {
+        let closure = move || {
+            let canvas = get_element_by_id::<HtmlCanvasElement>("canvas");
+            let width = canvas.client_width();
+            let height = canvas.client_height();
+            canvas.set_width(width as u32);
+            canvas.set_height(height as u32);
+            debug!("resized canvas to {}x{}", width, height);
+        };
+        // call it once to set the initial size
+        closure();
+
+        // then hand it over to the event handler
+        let closure = Closure::<dyn FnMut()>::new(closure);
+        window().set_onresize(Some(closure.as_ref().unchecked_ref()));
+        closure.forget();
+    }
 
     let canvas = get_element_by_id::<HtmlCanvasElement>("canvas");
     let rendering_context = canvas

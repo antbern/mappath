@@ -53,6 +53,7 @@ pub trait MapTrait {
 pub trait MapStorage<T> {
     type Reference: NodeReference;
 
+    fn is_valid(&self, node: Self::Reference) -> bool;
     fn get(&self, node: Self::Reference) -> T;
     fn get_mut(&mut self, node: Self::Reference) -> &mut T;
 
@@ -84,6 +85,10 @@ pub struct CellStorage<T>(Vec<Vec<T>>);
 impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
     type Reference = Point;
 
+    fn is_valid(&self, node: Self::Reference) -> bool {
+        node.row < self.0.len() && node.col < self.0[0].len()
+    }
+    
     fn get(&self, node: Self::Reference) -> T {
         self.0[node.row][node.col]
     }

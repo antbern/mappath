@@ -210,9 +210,8 @@ impl AppImpl<Map> {
 
     fn render_app(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
         let canvas = ctx.canvas().unwrap();
-        canvas.set_width((self.map.columns as f64 * self.size) as u32);
-        canvas.set_height((self.map.rows as f64 * self.size) as u32);
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        ctx.save();
         ctx.scale(self.size, self.size).unwrap();
 
         // render based on the current mode
@@ -221,6 +220,8 @@ impl AppImpl<Map> {
             Mode::Edit => self.render_app_edit(context, ctx),
             Mode::PathFind => self.render_app_find(context, ctx),
         }
+
+        ctx.restore();
     }
 
     fn render_map(&self, _context: &Context, ctx: &CanvasRenderingContext2d) {
@@ -331,12 +332,15 @@ impl AppImpl<Map> {
                 ctx.set_fill_style(&"#00FF00".into());
                 ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
 
-                let v = visited.get(Point { row, col });
+                let p = Point { row, col };
+                if visited.is_valid(p) {
+                    let v = visited.get(p);
 
-                context.set_output(&format!(
-                    "Cell @{row}:{col}\n{:?}\n\n{:?}",
-                    self.map.cells[row][col], v
-                ));
+                    context.set_output(&format!(
+                        "Cell @{row}:{col}\n{:#?}\n\n{:#?}",
+                        self.map.cells[row][col], v
+                    ));
+                }
             }
         }
     }
