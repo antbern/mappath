@@ -22,6 +22,12 @@ pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<
     start: Option<M::Reference>,
     goal: Option<M::Reference>,
     auto_step: bool,
+    edit_selection: Option<Selection<M::Reference>>,
+}
+
+enum Selection<R> {
+    Single(R),
+    // Rectangle(R, R),
 }
 
 struct FindState<M: MapTrait> {
@@ -48,6 +54,7 @@ impl AppImpl<Map> {
             start: None,
             goal: None,
             auto_step: true,
+            edit_selection: None,
         };
         s.set_editing(false, context);
         s
@@ -136,6 +143,19 @@ impl AppImpl<Map> {
                 self.start = Some(start);
 
                 self.find_state = Some(FindState { pathfinder: finder });
+            }
+            Event::MouseClicked {
+                x,
+                y,
+                button: MouseButton::Main,
+            } => {
+                let row = (y as f64 / self.size) as usize;
+                let col = (x as f64 / self.size) as usize;
+                let point = Point { row, col };
+
+                if self.map.is_valid(point) {
+                    self.edit_selection = Some(Selection::Single(point));
+                }
             }
             _ => {}
         }
@@ -256,35 +276,46 @@ impl AppImpl<Map> {
         ctx.stroke();
     }
 
+    fn draw_neighbors(&self, point: &Point, ctx: &CanvasRenderingContext2d, style: &str) {
+        if !self.map.is_valid(*point) {
+            return;
+        }
+
+        ctx.set_stroke_style(&style.into());
+        ctx.set_line_width(1.0 / self.size);
+        ctx.begin_path();
+        for (neighbor, _) in self.map.neighbors_of(*point) {
+            ctx.move_to(point.col as f64 + 0.5, point.row as f64 + 0.5);
+            ctx.line_to(neighbor.col as f64 + 0.5, neighbor.row as f64 + 0.5);
+        }
+        ctx.stroke();
+
+        let padding = 0.3;
+        ctx.set_fill_style(&style.into());
+        for (neighbor, _) in self.map.neighbors_of(*point) {
+            ctx.fill_rect(
+                neighbor.col as f64 + padding,
+                neighbor.row as f64 + padding,
+                1.0 - 2.0 * padding,
+                1.0 - 2.0 * padding,
+            );
+        }
+    }
     fn render_app_edit(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
         self.render_map(context, ctx);
 
-        // draw lines to the neighbors of the currently selected cell
+        // draw lines to the neighbors of the currently hovered cell
         if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
             let row = (y as f64 / self.size) as usize;
             let col = (x as f64 / self.size) as usize;
 
             let point = Point { row, col };
-            if self.map.is_valid(point) {
-                ctx.set_stroke_style(&"#FF0000".into());
-                ctx.set_line_width(1.0 / self.size);
-                ctx.begin_path();
-                for (neighbor, _) in self.map.neighbors_of(Point { row, col }) {
-                    ctx.move_to(col as f64 + 0.5, row as f64 + 0.5);
-                    ctx.line_to(neighbor.col as f64 + 0.5, neighbor.row as f64 + 0.5);
-                }
-                ctx.stroke();
+            self.draw_neighbors(&point, ctx, "#FF0000")
+        }
 
-                let padding = 0.3;
-                ctx.set_fill_style(&"#FF0000".into());
-                for (neighbor, _) in self.map.neighbors_of(Point { row, col }) {
-                    ctx.fill_rect(
-                        neighbor.col as f64 + padding,
-                        neighbor.row as f64 + padding,
-                        1.0 - 2.0 * padding,
-                        1.0 - 2.0 * padding,
-                    );
-                }
+        if let Some(selection) = &self.edit_selection {
+            match selection {
+                Selection::Single(point) => self.draw_neighbors(&point, ctx, "#00FF00"),
             }
         }
     }
