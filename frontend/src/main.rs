@@ -105,6 +105,21 @@ fn main() -> Result<(), JsValue> {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
 
+    // if we are in CI, set the hash and the url
+    if let Some(hash) = option_env!("GITHUB_SHA") {
+        let url = format!("https://github.com/antbern/mappath/tree/{hash}");
+
+        document()
+            .get_element_by_id("github-link")
+            .unwrap()
+            .set_attribute("href", &url)
+            .unwrap();
+        document()
+            .get_element_by_id("commit-hash")
+            .unwrap()
+            .set_inner_html(&hash[0..7]);
+    }
+
     // setup an event handler for window.onresize and scale the canvas based on it's
     // clientWidth/clientHeight
     {
