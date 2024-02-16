@@ -37,6 +37,11 @@ jobs:
         # relatively as eframe_template/favicon.ico. if we skip public-url option, the href paths will instead request username.github.io/favicon.ico which
         # will obviously return error 404 not found.
         run: ./trunk build frontend/index.html --release --public-url "${GITHUB_REPOSITORY#*/}"
+
+      - name: Disable jekyll
+        # we can include a .nojekyll file in the deployment to disable jekyll
+        run: touch frontend/dist/.nojekyll
+
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
