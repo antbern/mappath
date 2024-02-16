@@ -40,8 +40,12 @@ pub trait MapTrait {
     /// The type that can be used to reference nodes in the map
     type Reference: NodeReference;
 
+
     /// The type that the map uses for storage
     type Storage<T: Default + Copy + Clone + 'static>: MapStorage<T, Reference = Self::Reference>;
+
+    /// Check if the provided node reference is valid
+    fn is_valid(&self, node: Self::Reference) -> bool;
 
     /// Return an iterator over the neighbors of the provided node and the cost required to go there
     fn neighbors_of(&self, node: Self::Reference)
@@ -141,6 +145,10 @@ impl Display for Map {
 impl MapTrait for Map {
     type Reference = Point;
     type Storage<T: Default + Copy + Clone + 'static> = CellStorage<T>;
+
+    fn is_valid(&self, node: Self::Reference) -> bool {
+        node.row < self.rows && node.col < self.columns
+    }
 
     fn neighbors_of(
         &self,
