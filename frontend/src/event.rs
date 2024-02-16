@@ -20,6 +20,7 @@ pub enum ButtonId {
     Finish,
     ToggleEdit,
     LoadPreset,
+    ClearStorage,
 }
 
 impl ButtonId {
@@ -31,6 +32,7 @@ impl ButtonId {
             ButtonId::Finish => "btn-finish",
             ButtonId::ToggleEdit => "btn-mode-edit",
             ButtonId::LoadPreset => "btn-load-preset",
+            ButtonId::ClearStorage => "btn-clear-storage",
         }
     }
 
@@ -40,10 +42,9 @@ impl ButtonId {
             ButtonId::Reset,
             ButtonId::Step,
             ButtonId::Finish,
-            // ButtonId::ModeSetup,
             ButtonId::ToggleEdit,
-            // ButtonId::ModePathFind,
             ButtonId::LoadPreset,
+            ButtonId::ClearStorage,
         ]
         .iter()
         .copied()
@@ -74,18 +75,13 @@ pub enum SelectId {
     Mode,
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckboxId {
     AutoStep,
 }
-
 
 enum Widget {
     Button(ButtonId),
     Select(SelectId),
     // Checkbox(CheckboxId),
 }
-
-
-

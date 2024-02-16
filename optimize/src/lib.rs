@@ -9,8 +9,9 @@ use std::{
 };
 
 use image::{DynamicImage, GenericImageView};
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Cell {
     Invalid,
     Valid,
@@ -61,6 +62,7 @@ pub trait MapStorage<T> {
 }
 
 /// A MapTrait implementation that uses a rectangular grid of cells
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Map {
     pub rows: usize,
     pub columns: usize,
@@ -88,7 +90,7 @@ impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
     fn is_valid(&self, node: Self::Reference) -> bool {
         node.row < self.0.len() && node.col < self.0[0].len()
     }
-    
+
     fn get(&self, node: Self::Reference) -> T {
         self.0[node.row][node.col]
     }

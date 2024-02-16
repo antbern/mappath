@@ -1,3 +1,4 @@
+use gloo::storage::Storage;
 use log::debug;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -86,6 +87,24 @@ impl Context {
                 div.style().set_property("display", "none").unwrap();
             }
         });
+    }
+
+    pub fn get_storage<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
+        match gloo::storage::LocalStorage::get(key) {
+            Ok(Some(value)) => Some(value),
+            Err(e) => {
+                log::error!("Failed to get storage for key: {}: {}", key, e);
+                None
+            }
+            _ => None,
+        }
+    }
+    pub fn set_storage<T: serde::Serialize>(&self, key: &str, value: &T) {
+        gloo::storage::LocalStorage::set(key, value).unwrap();
+    }
+
+    pub fn remove_storage(&self, key: &str) {
+        gloo::storage::LocalStorage::delete(key);
     }
 
     pub fn input<R>(&self, f: impl FnOnce(&Input) -> R) -> R {

@@ -243,7 +243,10 @@ fn main() -> Result<(), JsValue> {
         register_change_event(
             "input-auto-step",
             move |element: &web_sys::HtmlInputElement| {
-                context.push_event(Event::CheckboxChanged(CheckboxId::AutoStep, element.checked() ));
+                context.push_event(Event::CheckboxChanged(
+                    CheckboxId::AutoStep,
+                    element.checked(),
+                ));
                 request_repaint();
             },
         );

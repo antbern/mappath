@@ -9,7 +9,9 @@ use wasm_bindgen::Clamped;
 use web_sys::CanvasRenderingContext2d;
 use web_sys::ImageData;
 
-pub struct AppImpl<M: MapTrait> {
+const STORAGE_KEY_MAP: &str = "map";
+
+pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>> {
     editing: bool,
     rows: usize,
     cols: usize,
@@ -28,11 +30,19 @@ struct FindState<M: MapTrait> {
 
 impl AppImpl<Map> {
     pub fn new(context: &Context) -> Self {
+        // if the map has been stored in the browser, get it from there
+        let map = if let Some(map) = context.get_storage::<Map>(STORAGE_KEY_MAP) {
+            debug!("loaded map from storage");
+            map
+        } else {
+            Map::new(10, 10)
+        };
+
         let mut s = Self {
             editing: false,
-            rows: 10,
-            cols: 10,
-            map: Map::new(10, 10),
+            rows: map.rows,
+            cols: map.columns,
+            map,
             size: 10.0,
             find_state: None,
             start: None,
@@ -60,6 +70,9 @@ impl AppImpl<Map> {
     fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
+            Event::ButtonPressed(ButtonId::ClearStorage) => {
+                context.remove_storage(STORAGE_KEY_MAP);
+            }
             Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
             Event::CheckboxChanged(CheckboxId::AutoStep, checked) => self.auto_step = checked,
             _ => {}
@@ -81,6 +94,9 @@ impl AppImpl<Map> {
         } else {
             // disable the edit inputs
             context.enable_element("edit-inputs", false);
+
+            // store the map in the localstorage
+            context.set_storage(STORAGE_KEY_MAP, &self.map);
         }
     }
 
