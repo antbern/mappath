@@ -53,7 +53,18 @@ fn register_canvas_event<T: FnMut(web_sys::MouseEvent) -> () + 'static>(
 
     closure.forget();
 }
+fn register_canvas_scroll<T: FnMut(web_sys::WheelEvent) -> () + 'static>(
+    canvas: &HtmlCanvasElement,
+    callback: T,
+) {
+    let closure = Closure::<dyn FnMut(web_sys::WheelEvent)>::new(callback);
 
+    canvas
+        .add_event_listener_with_callback("wheel", closure.as_ref().unchecked_ref())
+        .unwrap();
+
+    closure.forget();
+}
 fn create_basic_map() -> Map {
     use Cell::*;
     Map {
@@ -240,6 +251,20 @@ fn main() -> Result<(), JsValue> {
                 });
                 request_repaint();
             }
+        });
+    }
+    {
+        let context = context.clone();
+        let request_repaint = request_repaint.clone();
+        register_canvas_scroll(&canvas, move |event: web_sys::WheelEvent| {
+            context.push_event(Event::MouseWheel {
+                x: event.offset_x(),
+                y: event.offset_y(),
+                delta_x: event.delta_x(),
+                delta_y: event.delta_y(),
+            });
+            event.prevent_default();
+            request_repaint();
         });
     }
 

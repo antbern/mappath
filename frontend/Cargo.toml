@@ -33,6 +33,7 @@ features = [
   'HtmlCanvasElement',
   'ImageData',
   'MouseEvent',
+  'WheelEvent',
   'HtmlPreElement',
   'HtmlSelectElement',
   'CssStyleDeclaration',

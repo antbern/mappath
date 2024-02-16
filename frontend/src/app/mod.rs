@@ -27,6 +27,12 @@ pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<
     // stuff for selecting rectangles
     selection_start: Option<M::Reference>,
     selection_end: Option<M::Reference>,
+
+    // for panning and dragging
+    pan_start: Option<(f64, f64)>,
+    // offset and scale in unit coordinates
+    offset: (f64, f64),
+    scale: f64,
 }
 
 struct Selection<R> {
@@ -61,6 +67,9 @@ impl AppImpl<Map> {
             edit_selection: None,
             selection_start: None,
             selection_end: None,
+            pan_start: None,
+            offset: (0.0, 0.0),
+            scale: 1.0,
         };
         s.set_editing(false, context);
         s
@@ -71,9 +80,10 @@ impl App for AppImpl<Map> {
     fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
-            // TODO: give the event to panning and zooming first, and if it was not handled, give it to the app
-
-            self.handle_event(event, context);
+            // give the event to panning and zooming first, and if it was not handled, give it to the app
+            if !self.handle_event_panning(&event) {
+                self.handle_event(event, context);
+            }
         }
 
         self.render_app(context, ctx);
@@ -97,6 +107,96 @@ impl AppImpl<Map> {
             self.handle_event_edit(event, context);
         } else {
             self.handle_event_path_find(event, context);
+        }
+    }
+
+    /// converts a mouse position into a world position
+    fn mouse_to_world(&self, x: i32, y: i32) -> (f64, f64) {
+        let (x, y) = (x as f64, y as f64);
+        let (x, y) = (x / self.size, y / self.size);
+        let (x, y) = (x / self.scale, y / self.scale);
+        let (x, y) = (x - self.offset.0, y - self.offset.1);
+        (x, y)
+    }
+
+    fn mouse_to_world_point_valid(&self, x: i32, y: i32) -> Option<Point> {
+        let (x, y) = self.mouse_to_world(x, y);
+
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        let point = Point {
+            row: y as usize,
+            col: x as usize,
+        };
+        if self.map.is_valid(point) {
+            Some(point)
+        } else {
+            None
+        }
+    }
+
+    fn handle_event_panning(&mut self, event: &Event) -> bool {
+        match event {
+            Event::MousePressed {
+                x,
+                y,
+                button: MouseButton::Secondary,
+            } => {
+                // convert the mouse position to unit coordinates
+                // let (x, y) = self.mouse_to_world(*x, *y);
+                let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
+
+                debug!("pan start: {:?}", (x, y));
+                self.pan_start = Some((x, y));
+                true
+            }
+            Event::MouseMove { x, y } => {
+                if let Some(pan_start) = self.pan_start {
+                    // let (x, y) = self.mouse_to_world(*x, *y);
+                    let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
+
+                    let (dx, dy) = (x - pan_start.0, y - pan_start.1);
+                    self.offset.0 += dx / self.scale;
+                    self.offset.1 += dy / self.scale;
+
+                    self.pan_start = Some((x, y));
+                    true
+                } else {
+                    false
+                }
+            }
+
+            Event::MouseReleased {
+                x: _,
+                y: _,
+                button: MouseButton::Secondary,
+            } => {
+                if self.pan_start.is_some() {
+                    self.pan_start = None;
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::MouseWheel {
+                x,
+                y,
+                delta_x: _,
+                delta_y,
+            } => {
+                let (x, y) = self.mouse_to_world(*x, *y);
+
+                let scale_factor = if *delta_y > 0.0 { 1.1 } else { 1.0 / 1.1 };
+
+                self.offset.0 = x + (self.offset.0 - x) * scale_factor;
+                self.offset.1 = y + (self.offset.1 - y) * scale_factor;
+
+                self.scale *= scale_factor;
+
+                true
+            }
+            _ => false,
         }
     }
 
@@ -155,10 +255,7 @@ impl AppImpl<Map> {
                 y,
                 button: MouseButton::Main,
             } => {
-                let row = (y as f64 / self.size) as usize;
-                let col = (x as f64 / self.size) as usize;
-                let point = Point { row, col };
-                if self.map.is_valid(point) {
+                if let Some(point) = self.mouse_to_world_point_valid(x, y) {
                     self.selection_start = Some(point);
                     self.selection_end = Some(point);
                     self.edit_selection = Some(Selection {
@@ -180,10 +277,7 @@ impl AppImpl<Map> {
 
             Event::MouseMove { x, y } => {
                 if let Some(start) = self.selection_start {
-                    let row = (y as f64 / self.size) as usize;
-                    let col = (x as f64 / self.size) as usize;
-                    let end = Point { row, col };
-                    if self.map.is_valid(end) {
+                    if let Some(end) = self.mouse_to_world_point_valid(x, y) {
                         self.selection_end = Some(end);
 
                         // update the internal selection statelet (start, end) = (
@@ -234,23 +328,22 @@ impl AppImpl<Map> {
             },
 
             Event::MouseReleased { x, y, button } => {
-                let row = (y as f64 / self.size) as usize;
-                let col = (x as f64 / self.size) as usize;
-
-                match button {
-                    MouseButton::Main => self.start = Some(Point { row, col }),
-                    MouseButton::Secondary => self.goal = Some(Point { row, col }),
-                    _ => {}
-                }
-                debug!("{:?} -> {:?}", self.start, self.goal);
-                if let (Some(start), Some(goal)) = (self.start, self.goal) {
-                    self.find_state = Some(FindState {
-                        pathfinder: PathFinder::new(
-                            start,
-                            goal,
-                            self.map.create_storage::<Visited<Point>>(),
-                        ),
-                    });
+                if let Some(point) = self.mouse_to_world_point_valid(x, y) {
+                    match button {
+                        MouseButton::Main => self.start = Some(point),
+                        MouseButton::Secondary => self.goal = Some(point),
+                        _ => {}
+                    }
+                    debug!("{:?} -> {:?}", self.start, self.goal);
+                    if let (Some(start), Some(goal)) = (self.start, self.goal) {
+                        self.find_state = Some(FindState {
+                            pathfinder: PathFinder::new(
+                                start,
+                                goal,
+                                self.map.create_storage::<Visited<Point>>(),
+                            ),
+                        });
+                    }
                 }
             }
             _ => {}
@@ -261,8 +354,14 @@ impl AppImpl<Map> {
         let canvas = ctx.canvas().unwrap();
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
         ctx.save();
+        // let total_scale = self.scale * self.size;
+        // ctx.scale(total_scale, total_scale).unwrap();
+        ctx.set_line_width(1.0 / (self.scale * self.size));
+
         ctx.scale(self.size, self.size).unwrap();
-        ctx.set_line_width(1.0 / self.size);
+        ctx.translate(self.offset.0 * self.scale, self.offset.1 * self.scale)
+            .unwrap();
+        ctx.scale(self.scale, self.scale).unwrap();
 
         // TODO: implement panning and zooming to translate and scale the map further
 
@@ -350,11 +449,9 @@ impl AppImpl<Map> {
 
         // draw lines to the neighbors of the currently hovered cell
         if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
-            let row = (y as f64 / self.size) as usize;
-            let col = (x as f64 / self.size) as usize;
-
-            let point = Point { row, col };
-            self.draw_neighbors(&point, ctx, "#FF0000")
+            if let Some(point) = self.mouse_to_world_point_valid(x, y) {
+                self.draw_neighbors(&point, ctx, "#00FF00");
+            }
         }
 
         if let Some(selection) = &self.edit_selection {
@@ -430,19 +527,16 @@ impl AppImpl<Map> {
 
             // get the cell the user is hovering
             if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
-                let row = (y as f64 / self.size) as usize;
-                let col = (x as f64 / self.size) as usize;
+                if let Some(point) = self.mouse_to_world_point_valid(x, y) {
+                    ctx.set_fill_style(&"#00FF00".into());
+                    ctx.fill_rect(point.col as f64, point.row as f64, 1.0, 1.0);
 
-                ctx.set_fill_style(&"#00FF00".into());
-                ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
-
-                let p = Point { row, col };
-                if visited.is_valid(p) {
-                    let v = visited.get(p);
+                    let v = visited.get(point);
 
                     context.set_output(&format!(
-                        "Cell @{row}:{col}\n{:#?}\n\n{:#?}",
-                        self.map.cells[row][col], v
+                        "Cell @{}:{}\n{:#?}\n\n{:#?}",
+                        point.row, point.col,
+                        self.map.cells[point.row][point.col], v
                     ));
                 }
             }
