@@ -23,11 +23,15 @@ pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<
     goal: Option<M::Reference>,
     auto_step: bool,
     edit_selection: Option<Selection<M::Reference>>,
+
+    // stuff for selecting rectangles
+    selection_start: Option<M::Reference>,
+    selection_end: Option<M::Reference>,
 }
 
-enum Selection<R> {
-    Single(R),
-    // Rectangle(R, R),
+struct Selection<R> {
+    start: R,
+    end: R,
 }
 
 struct FindState<M: MapTrait> {
@@ -55,6 +59,8 @@ impl AppImpl<Map> {
             goal: None,
             auto_step: true,
             edit_selection: None,
+            selection_start: None,
+            selection_end: None,
         };
         s.set_editing(false, context);
         s
@@ -144,7 +150,7 @@ impl AppImpl<Map> {
 
                 self.find_state = Some(FindState { pathfinder: finder });
             }
-            Event::MouseClicked {
+            Event::MousePressed {
                 x,
                 y,
                 button: MouseButton::Main,
@@ -152,9 +158,48 @@ impl AppImpl<Map> {
                 let row = (y as f64 / self.size) as usize;
                 let col = (x as f64 / self.size) as usize;
                 let point = Point { row, col };
-
                 if self.map.is_valid(point) {
-                    self.edit_selection = Some(Selection::Single(point));
+                    self.selection_start = Some(point);
+                    self.selection_end = Some(point);
+                    self.edit_selection = Some(Selection {
+                        start: point,
+                        end: point,
+                    });
+                }
+            }
+            Event::MouseReleased {
+                x: _,
+                y: _,
+                button: MouseButton::Main,
+            } => {
+                self.selection_start = None;
+                self.selection_end = None;
+
+                // TODO: load the values from the selected area (if applicable)
+            }
+
+            Event::MouseMove { x, y } => {
+                if let Some(start) = self.selection_start {
+                    let row = (y as f64 / self.size) as usize;
+                    let col = (x as f64 / self.size) as usize;
+                    let end = Point { row, col };
+                    if self.map.is_valid(end) {
+                        self.selection_end = Some(end);
+
+                        // update the internal selection statelet (start, end) = (
+                        let (start, end) = (
+                            Point {
+                                row: start.row.min(end.row),
+                                col: start.col.min(end.col),
+                            },
+                            Point {
+                                row: start.row.max(end.row),
+                                col: start.col.max(end.col),
+                            },
+                        );
+
+                        self.edit_selection = Some(Selection { start, end });
+                    }
                 }
             }
             _ => {}
@@ -217,6 +262,7 @@ impl AppImpl<Map> {
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
         ctx.save();
         ctx.scale(self.size, self.size).unwrap();
+        ctx.set_line_width(1.0 / self.size);
 
         // TODO: implement panning and zooming to translate and scale the map further
 
@@ -263,7 +309,6 @@ impl AppImpl<Map> {
 
         // draw lines between all the cells
         ctx.set_stroke_style(&"#000000".into());
-        ctx.set_line_width(1.0 / self.size);
         ctx.begin_path();
         for row in 0..=self.map.rows {
             ctx.move_to(0.0, row as f64);
@@ -282,7 +327,6 @@ impl AppImpl<Map> {
         }
 
         ctx.set_stroke_style(&style.into());
-        ctx.set_line_width(1.0 / self.size);
         ctx.begin_path();
         for (neighbor, _) in self.map.neighbors_of(*point) {
             ctx.move_to(point.col as f64 + 0.5, point.row as f64 + 0.5);
@@ -314,9 +358,15 @@ impl AppImpl<Map> {
         }
 
         if let Some(selection) = &self.edit_selection {
-            match selection {
-                Selection::Single(point) => self.draw_neighbors(&point, ctx, "#00FF00"),
-            }
+            let Selection { start, end } = selection;
+
+            ctx.set_fill_style(&"rgba(0, 255, 0, 0.5)".into());
+            ctx.fill_rect(
+                start.col as f64,
+                start.row as f64,
+                end.col as f64 - start.col as f64 + 1.0,
+                end.row as f64 - start.row as f64 + 1.0,
+            );
         }
     }
 
@@ -366,7 +416,6 @@ impl AppImpl<Map> {
                 }
                 PathFinderState::PathFound(pr) => {
                     ctx.set_stroke_style(&"#00FF00".into());
-                    ctx.set_line_width(1.0 / self.size);
                     ctx.begin_path();
                     ctx.move_to(pr.start.col as f64 + 0.5, pr.start.row as f64 + 0.5);
                     for p in &pr.path {
