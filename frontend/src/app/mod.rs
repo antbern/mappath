@@ -71,7 +71,9 @@ impl AppImpl<Map> {
         // switch mode if the mode buttons were pressed
         match event {
             Event::ButtonPressed(ButtonId::ClearStorage) => {
-                context.remove_storage(STORAGE_KEY_MAP);
+                if gloo::dialogs::confirm("Are you sure you want to clear the storage?") {
+                    context.remove_storage(STORAGE_KEY_MAP);
+                }
             }
             Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
             Event::CheckboxChanged(CheckboxId::AutoStep, checked) => self.auto_step = checked,
@@ -130,6 +132,8 @@ impl AppImpl<Map> {
                 self.rows = map.rows;
                 self.cols = map.columns;
                 self.map = map;
+                self.goal = Some(goal);
+                self.start = Some(start);
 
                 self.find_state = Some(FindState { pathfinder: finder });
             }
