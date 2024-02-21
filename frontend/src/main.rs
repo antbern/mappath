@@ -210,7 +210,7 @@ fn main() -> Result<(), JsValue> {
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "mousedown", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
-                context.push_event(Event::MousePressed(event.into())); 
+                context.push_event(Event::MousePressed(event.into()));
                 request_repaint();
             }
         });
@@ -220,7 +220,7 @@ fn main() -> Result<(), JsValue> {
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "mouseup", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
-                context.push_event(Event::MouseReleased (event.into()));
+                context.push_event(Event::MouseReleased(event.into()));
                 request_repaint();
             }
         });
@@ -230,7 +230,7 @@ fn main() -> Result<(), JsValue> {
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "click", move |event: web_sys::MouseEvent| {
             if let Some(button) = event::MouseButton::from_web_button(event.button()) {
-                context.push_event(Event::MouseClicked(event.into())); 
+                context.push_event(Event::MouseClicked(event.into()));
                 request_repaint();
             }
         });

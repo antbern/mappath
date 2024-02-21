@@ -141,7 +141,8 @@ impl AppImpl<Map> {
             Event::MousePressed(MouseEvent {
                 x,
                 y,
-                button: MouseButton::Secondary,
+                button: MouseButton::Main,
+                ctrl_pressed: true,
                 ..
             }) => {
                 // convert the mouse position to unit coordinates
@@ -152,7 +153,12 @@ impl AppImpl<Map> {
                 self.pan_start = Some((x, y));
                 true
             }
-            Event::MouseMove(MouseEvent { x, y, .. }) => {
+            Event::MouseMove(MouseEvent {
+                x,
+                y,
+                ctrl_pressed: true,
+                ..
+            }) => {
                 if let Some(pan_start) = self.pan_start {
                     // let (x, y) = self.mouse_to_world(*x, *y);
                     let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
@@ -168,10 +174,9 @@ impl AppImpl<Map> {
                 }
             }
 
-            Event::MouseReleased(MouseEvent {
-                x: _,
-                y: _,
-                button: MouseButton::Secondary,
+            Event::MouseReleased(_)
+            | Event::MouseMove(MouseEvent {
+                ctrl_pressed: false,
                 ..
             }) => {
                 if self.pan_start.is_some() {
@@ -189,7 +194,12 @@ impl AppImpl<Map> {
             } => {
                 let (x, y) = self.mouse_to_world(*x, *y);
 
-                let scale_factor = if *delta_y > 0.0 { 1.1 } else { 1.0 / 1.1 };
+                let scale_factor = 1.02;
+                let scale_factor = if *delta_y > 0.0 {
+                    scale_factor
+                } else {
+                    1.0 / scale_factor
+                };
 
                 self.offset.0 = x + (self.offset.0 - x) * scale_factor;
                 self.offset.1 = y + (self.offset.1 - y) * scale_factor;
