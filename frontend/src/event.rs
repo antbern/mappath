@@ -25,6 +25,7 @@ pub struct MouseEvent {
     pub y: i32,
     pub button: MouseButton,
     pub ctrl_pressed: bool,
+    pub shift_pressed: bool,
 }
 
 impl From<web_sys::MouseEvent> for MouseEvent {
@@ -34,6 +35,7 @@ impl From<web_sys::MouseEvent> for MouseEvent {
             y: event.offset_y(),
             button: MouseButton::from_web_button(event.button()).unwrap(),
             ctrl_pressed: event.ctrl_key(),
+            shift_pressed: event.shift_key(),
         }
     }
 }

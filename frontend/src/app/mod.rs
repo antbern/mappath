@@ -331,13 +331,19 @@ impl AppImpl<Map> {
                 }
             },
 
-            Event::MouseReleased(MouseEvent { x, y, button, .. }) => {
+            Event::MouseReleased(MouseEvent {
+                x,
+                y,
+                button: MouseButton::Main,
+                shift_pressed,
+                ..
+            }) => {
                 if let Some(point) = self.mouse_to_world_point_valid(x, y) {
-                    match button {
-                        MouseButton::Main => self.start = Some(point),
-                        MouseButton::Secondary => self.goal = Some(point),
-                        _ => {}
+                    match shift_pressed {
+                        false => self.start = Some(point),
+                        true => self.goal = Some(point),
                     }
+
                     debug!("{:?} -> {:?}", self.start, self.goal);
                     if let (Some(start), Some(goal)) = (self.start, self.goal) {
                         self.find_state = Some(FindState {
