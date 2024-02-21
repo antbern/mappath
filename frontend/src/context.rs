@@ -10,6 +10,7 @@ use web_sys::HtmlPreElement;
 
 use crate::event::ButtonId;
 use crate::event::Event;
+use crate::event::MouseEvent;
 
 #[derive(Clone)]
 pub struct Context {
@@ -153,9 +154,9 @@ impl Default for Input {
 impl Input {
     pub fn on_event(&mut self, event: Event) {
         match event {
-            Event::MouseEnter { x, y } => self.mouse_position = Some((x, y)),
-            Event::MouseMove { x, y } => self.mouse_position = Some((x, y)),
-            Event::MouseLeave => self.mouse_position = None,
+            Event::MouseEnter(MouseEvent { x, y, .. }) => self.mouse_position = Some((x, y)),
+            Event::MouseMove(MouseEvent { x, y, .. }) => self.mouse_position = Some((x, y)),
+            Event::MouseLeave(_) => self.mouse_position = None,
             _ => {}
         }
     }

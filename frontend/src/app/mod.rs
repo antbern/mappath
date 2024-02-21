@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::event::{ButtonId, CheckboxId, Event, MouseButton};
+use crate::event::{ButtonId, CheckboxId, Event, MouseButton, MouseEvent};
 use crate::App;
 
 use log::debug;
@@ -138,11 +138,12 @@ impl AppImpl<Map> {
 
     fn handle_event_panning(&mut self, event: &Event) -> bool {
         match event {
-            Event::MousePressed {
+            Event::MousePressed(MouseEvent {
                 x,
                 y,
                 button: MouseButton::Secondary,
-            } => {
+                ..
+            }) => {
                 // convert the mouse position to unit coordinates
                 // let (x, y) = self.mouse_to_world(*x, *y);
                 let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
@@ -151,7 +152,7 @@ impl AppImpl<Map> {
                 self.pan_start = Some((x, y));
                 true
             }
-            Event::MouseMove { x, y } => {
+            Event::MouseMove(MouseEvent { x, y, .. }) => {
                 if let Some(pan_start) = self.pan_start {
                     // let (x, y) = self.mouse_to_world(*x, *y);
                     let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
@@ -167,11 +168,12 @@ impl AppImpl<Map> {
                 }
             }
 
-            Event::MouseReleased {
+            Event::MouseReleased(MouseEvent {
                 x: _,
                 y: _,
                 button: MouseButton::Secondary,
-            } => {
+                ..
+            }) => {
                 if self.pan_start.is_some() {
                     self.pan_start = None;
                     true
@@ -250,11 +252,12 @@ impl AppImpl<Map> {
 
                 self.find_state = Some(FindState { pathfinder: finder });
             }
-            Event::MousePressed {
+            Event::MousePressed(MouseEvent {
                 x,
                 y,
                 button: MouseButton::Main,
-            } => {
+                ..
+            }) => {
                 if let Some(point) = self.mouse_to_world_point_valid(x, y) {
                     self.selection_start = Some(point);
                     self.selection_end = Some(point);
@@ -264,18 +267,19 @@ impl AppImpl<Map> {
                     });
                 }
             }
-            Event::MouseReleased {
+            Event::MouseReleased(MouseEvent {
                 x: _,
                 y: _,
                 button: MouseButton::Main,
-            } => {
+                ..
+            }) => {
                 self.selection_start = None;
                 self.selection_end = None;
 
                 // TODO: load the values from the selected area (if applicable)
             }
 
-            Event::MouseMove { x, y } => {
+            Event::MouseMove(MouseEvent { x, y, .. }) => {
                 if let Some(start) = self.selection_start {
                     if let Some(end) = self.mouse_to_world_point_valid(x, y) {
                         self.selection_end = Some(end);
@@ -327,7 +331,7 @@ impl AppImpl<Map> {
                 }
             },
 
-            Event::MouseReleased { x, y, button } => {
+            Event::MouseReleased(MouseEvent { x, y, button, .. }) => {
                 if let Some(point) = self.mouse_to_world_point_valid(x, y) {
                     match button {
                         MouseButton::Main => self.start = Some(point),
@@ -535,8 +539,7 @@ impl AppImpl<Map> {
 
                     context.set_output(&format!(
                         "Cell @{}:{}\n{:#?}\n\n{:#?}",
-                        point.row, point.col,
-                        self.map.cells[point.row][point.col], v
+                        point.row, point.col, self.map.cells[point.row][point.col], v
                     ));
                 }
             }

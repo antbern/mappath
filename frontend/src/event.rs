@@ -5,13 +5,37 @@ pub enum Event {
     ButtonPressed(ButtonId),
     SelectChanged(SelectId, String),
     CheckboxChanged(CheckboxId, bool),
-    MouseMove { x: i32, y: i32 },
-    MouseEnter { x: i32, y: i32 },
-    MouseLeave,
-    MousePressed { x: i32, y: i32, button: MouseButton },
-    MouseReleased { x: i32, y: i32, button: MouseButton },
-    MouseClicked { x: i32, y: i32, button: MouseButton },
-    MouseWheel { x: i32, y: i32,  delta_x: f64, delta_y: f64 },
+    MouseMove(MouseEvent),
+    MouseEnter(MouseEvent),
+    MouseLeave(MouseEvent),
+    MousePressed(MouseEvent),
+    MouseReleased(MouseEvent),
+    MouseClicked(MouseEvent),
+    MouseWheel {
+        x: i32,
+        y: i32,
+        delta_x: f64,
+        delta_y: f64,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct MouseEvent {
+    pub x: i32,
+    pub y: i32,
+    pub button: MouseButton,
+    pub ctrl_pressed: bool,
+}
+
+impl From<web_sys::MouseEvent> for MouseEvent {
+    fn from(event: web_sys::MouseEvent) -> Self {
+        MouseEvent {
+            x: event.offset_x(),
+            y: event.offset_y(),
+            button: MouseButton::from_web_button(event.button()).unwrap(),
+            ctrl_pressed: event.ctrl_key(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
