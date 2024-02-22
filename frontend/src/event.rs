@@ -48,6 +48,7 @@ pub enum ButtonId {
     ToggleEdit,
     LoadPreset,
     ClearStorage,
+    EditSave,
 }
 
 impl ButtonId {
@@ -60,6 +61,7 @@ impl ButtonId {
             ButtonId::ToggleEdit => "btn-mode-edit",
             ButtonId::LoadPreset => "btn-load-preset",
             ButtonId::ClearStorage => "btn-clear-storage",
+            ButtonId::EditSave => "btn-edit-save",
         }
     }
 
@@ -72,6 +74,7 @@ impl ButtonId {
             ButtonId::ToggleEdit,
             ButtonId::LoadPreset,
             ButtonId::ClearStorage,
+            ButtonId::EditSave,
         ]
         .iter()
         .copied()

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
-use context::{Context, ContextImpl, Input};
+use context::{CellSelector, Context, ContextImpl, Input};
 use event::{ButtonId, CheckboxId};
 use log::debug;
 use optimize::{Cell, Map};
@@ -164,6 +164,13 @@ fn main() -> Result<(), JsValue> {
     // setup the context for the app to interact with the world
     let context = Context::new(ContextImpl {
         document: document(),
+        cell_selector: CellSelector {
+            radio_invalid: get_element_by_id("cell-invalid"),
+            radio_valid: get_element_by_id("cell-normal"),
+            input_valid_cost: get_element_by_id("input-normal-cost"),
+            radio_oneway: get_element_by_id("cell-oneway"),
+            select_oneway: get_element_by_id("select-oneway"),
+        },
         output,
         input: Input::default(),
         events: VecDeque::new(),

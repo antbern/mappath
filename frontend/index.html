@@ -29,6 +29,26 @@
 					<!-- 	<option value="edit">Edit Cells</option> -->
 					<!-- 	<option value="find">Find Paths</option> -->
 					<!-- </select> -->
+					<br />
+					<input type="radio" name="cell" value="invalid" id="cell-invalid">
+					<label for="cell-invalid">: Invalid</label><br />
+
+					<input type="radio" name="cell" value="normal" id="cell-normal">
+					<label for="cell-normal">: Normal</label>
+					<input type="number" id="input-normal-cost" value="1">
+					<br />
+
+					<input type="radio" name="cell" value="oneway" id="cell-oneway">
+					<label for="cell-oneway">: One-Way</label>
+					<select id="select-oneway">
+
+						<option value="up">Up</option>
+						<option value="down">Down</option>
+						<option value="left">Left</option>
+						<option value="right">Right</option>
+					</select>
+					<br />
+					<button id="btn-edit-save">Save</button>
 				</fieldset>
 
 

@@ -40,7 +40,6 @@ pub trait MapTrait {
     /// The type that can be used to reference nodes in the map
     type Reference: NodeReference;
 
-
     /// The type that the map uses for storage
     type Storage<T: Default + Copy + Clone + 'static>: MapStorage<T, Reference = Self::Reference>;
 

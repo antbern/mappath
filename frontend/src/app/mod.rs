@@ -287,8 +287,21 @@ impl AppImpl<Map> {
                 self.selection_end = None;
 
                 // TODO: load the values from the selected area (if applicable)
+                if let Some(selection) = &self.edit_selection {
+                    let cell = self.map.cells[selection.start.row][selection.start.col];
+                    context.set_active_cell(cell);
+                }
             }
-
+            Event::ButtonPressed(ButtonId::EditSave) => {
+                if let Some(selection) = &self.edit_selection {
+                    let cell = context.get_active_cell();
+                    for row in selection.start.row..=selection.end.row {
+                        for col in selection.start.col..=selection.end.col {
+                            self.map.cells[row][col] = cell;
+                        }
+                    }
+                }
+            }
             Event::MouseMove(MouseEvent { x, y, .. }) => {
                 if let Some(start) = self.selection_start {
                     if let Some(end) = self.mouse_to_world_point_valid(x, y) {

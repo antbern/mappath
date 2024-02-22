@@ -1,12 +1,15 @@
 use gloo::storage::Storage;
 use log::debug;
+use optimize::Cell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
 use wasm_bindgen::JsCast;
 use web_sys::Document;
 use web_sys::HtmlDivElement;
+use web_sys::HtmlInputElement;
 use web_sys::HtmlPreElement;
+use web_sys::HtmlSelectElement;
 
 use crate::event::ButtonId;
 use crate::event::Event;
@@ -138,6 +141,55 @@ impl Context {
             repaint_requested
         })
     }
+
+    pub fn set_active_cell(&self, cell: Cell) {
+        self.write(|inner| {
+            inner.cell_selector.set_cell(cell);
+        });
+    }
+    pub fn get_active_cell(&self) -> Cell {
+        self.read(|inner| inner.cell_selector.get_cell())
+    }
+}
+
+pub struct CellSelector {
+    pub radio_invalid: HtmlInputElement,
+    pub radio_valid: HtmlInputElement,
+    pub input_valid_cost: HtmlInputElement,
+    pub radio_oneway: HtmlInputElement,
+    pub select_oneway: HtmlSelectElement,
+}
+
+impl CellSelector {
+    pub fn set_cell(&self, cell: Cell) {
+        debug!("setting cell: {:?}", cell);
+        self.input_valid_cost.set_disabled(true);
+        self.select_oneway.set_disabled(true);
+
+        match cell {
+            Cell::Invalid => self.radio_invalid.set_checked(true),
+            Cell::Valid => self.radio_valid.set_checked(true),
+            Cell::Cost(cost) => {
+                self.radio_valid.set_checked(true);
+                self.input_valid_cost.set_disabled(false);
+                self.input_valid_cost.set_value(&cost.to_string());
+            } // Cell::OneWay => {
+              //     self.radio_oneway.set_checked(true);
+              //     self.select_oneway.set_disabled(false);
+              // }
+        }
+    }
+
+    pub fn get_cell(&self) -> Cell {
+        if self.radio_invalid.checked() {
+            Cell::Invalid
+        } else if self.radio_valid.checked() {
+            Cell::Valid
+        } else {
+            let cost = self.input_valid_cost.value().parse().unwrap();
+            Cell::Cost(cost)
+        }
+    }
 }
 
 pub struct Input {
@@ -167,6 +219,7 @@ impl Input {
 }
 pub struct ContextImpl {
     pub document: Document,
+    pub cell_selector: CellSelector,
     pub output: HtmlPreElement,
     pub input: Input,
     pub events: VecDeque<Event>,
