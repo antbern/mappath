@@ -169,10 +169,12 @@ impl CellSelector {
             Cell::Valid { cost } => {
                 self.radio_valid.set_checked(true);
                 self.input_valid_cost.set_value(&cost.to_string());
-            } // Cell::OneWay => {
-              //     self.radio_oneway.set_checked(true);
-              //     self.select_oneway.set_disabled(false);
-              // }
+            }
+            Cell::OneWay { cost, direction } => {
+                self.radio_oneway.set_checked(true);
+                self.input_valid_cost.set_value(&cost.to_string());
+                self.select_oneway.set_value(&direction.to_string());
+            }
         }
     }
 
@@ -182,7 +184,11 @@ impl CellSelector {
         } else if self.radio_valid.checked() {
             let cost = self.input_valid_cost.value().parse().unwrap();
             Some(Cell::Valid { cost })
-        } else {
+        } else if self.radio_oneway.checked() {
+            let cost = self.input_valid_cost.value().parse().unwrap();
+            let direction = self.select_oneway.value().parse().unwrap();
+            Some(Cell::OneWay { cost, direction })
+        }else {
             None
         }
     }

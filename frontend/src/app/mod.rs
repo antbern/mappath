@@ -433,6 +433,7 @@ impl AppImpl<Map> {
                     Cell::Invalid => "#000000".into(),
                     Cell::Valid { cost: 1 } => "#FFFFFF".into(),
                     Cell::Valid { .. } => "#FFFF00".into(),
+                    Cell::OneWay { .. } => "#00FFFF".into(),
                 };
 
                 ctx.set_fill_style(&color.into());

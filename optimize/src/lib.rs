@@ -5,7 +5,7 @@ use std::{
     cmp::Ordering,
     collections::BinaryHeap,
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut}, str::FromStr,
 };
 
 use image::{DynamicImage, GenericImageView};
@@ -15,6 +15,44 @@ use serde::{Deserialize, Serialize};
 pub enum Cell {
     Invalid,
     Valid { cost: usize },
+    OneWay { cost: usize, direction: Direction },
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Direction::Up => "up",
+                Direction::Down => "down",
+                Direction::Left => "left",
+                Direction::Right => "right",
+            }
+        )
+    }
+}
+
+impl FromStr for Direction {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "up" => Ok(Direction::Up),
+            "down" => Ok(Direction::Down),
+            "left" => Ok(Direction::Left),
+            "right" => Ok(Direction::Right),
+            _ => Err(anyhow::anyhow!("Invalid direction: {}", s)),
+        }
+    }
 }
 
 impl Display for Cell {
@@ -26,6 +64,12 @@ impl Display for Cell {
                 Cell::Invalid => "X",
                 Cell::Valid { cost } if *cost == 1 => " ",
                 Cell::Valid { .. } => "$",
+                Cell::OneWay { direction, .. } => match direction {
+                    Direction::Up => "🠭",
+                    Direction::Down => "🠯",
+                    Direction::Left => "🠬",
+                    Direction::Right => "🠮",
+                },
             }
         )
     }
@@ -156,48 +200,87 @@ impl MapTrait for Map {
 
         let c = self.cells[node.row][node.col];
 
-        let move_cost = match c {
-            Cell::Valid { cost } => cost,
-            Cell::Invalid => return points.into_iter(),
+        match c {
+            Cell::Valid { cost } => {
+                if node.row > 0 {
+                    points.push((
+                        Point {
+                            row: node.row - 1,
+                            col: node.col,
+                        },
+                        cost,
+                    ));
+                }
+                if node.col > 0 {
+                    points.push((
+                        Point {
+                            col: node.col - 1,
+                            row: node.row,
+                        },
+                        cost,
+                    ));
+                }
+
+                if node.row < self.rows - 1 {
+                    points.push((
+                        Point {
+                            row: node.row + 1,
+                            col: node.col,
+                        },
+                        cost,
+                    ));
+                }
+                if node.col < self.columns - 1 {
+                    points.push((
+                        Point {
+                            col: node.col + 1,
+                            row: node.row,
+                        },
+                        cost,
+                    ));
+                }
+            }
+            Cell::OneWay { cost, direction } => {
+                if node.row > 0 && direction != Direction::Down {
+                    points.push((
+                        Point {
+                            row: node.row - 1,
+                            col: node.col,
+                        },
+                        cost,
+                    ));
+                }
+                if node.col > 0 && direction != Direction::Right {
+                    points.push((
+                        Point {
+                            col: node.col - 1,
+                            row: node.row,
+                        },
+                        cost,
+                    ));
+                }
+
+                if node.row < self.rows - 1 && direction != Direction::Up {
+                    points.push((
+                        Point {
+                            row: node.row + 1,
+                            col: node.col,
+                        },
+                        cost,
+                    ));
+                }
+                if node.col < self.columns - 1 && direction != Direction::Left {
+                    points.push((
+                        Point {
+                            col: node.col + 1,
+                            row: node.row,
+                        },
+                        cost,
+                    ));
+                }
+            }
+            Cell::Invalid => {}
         };
-
-        if node.row > 0 {
-            points.push((
-                Point {
-                    row: node.row - 1,
-                    col: node.col,
-                },
-                move_cost,
-            ));
-        }
-        if node.col > 0 {
-            points.push((
-                Point {
-                    col: node.col - 1,
-                    row: node.row,
-                },
-                move_cost,
-            ));
-        }
-
-        if node.row < self.rows - 1 {
-            points.push((
-                Point {
-                    row: node.row + 1,
-                    col: node.col,
-                },
-                move_cost,
-            ));
-        }
-        if node.col < self.columns - 1 {
-            points.push((
-                Point {
-                    col: node.col + 1,
-                    row: node.row,
-                },
-                move_cost,
-            ));
-        }
 
         // filter to only keep valid cells
         points.retain(|(p, _)| self.cells[p.row][p.col] != Cell::Invalid);
