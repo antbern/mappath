@@ -1,4 +1,4 @@
-use optimize::{parse_img, CellStorage, MapStorage, MapTrait, PathFinder, Point, Visited};
+use optimize::{parse_img, MapTrait, PathFinder, Point};
 
 #[allow(unused_must_use)]
 fn main() -> Result<(), anyhow::Error> {

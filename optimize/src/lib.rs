@@ -14,8 +14,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Cell {
     Invalid,
-    Valid,
-    Cost(usize),
+    Valid { cost: usize },
 }
 
 impl Display for Cell {
@@ -25,8 +24,8 @@ impl Display for Cell {
             "{}",
             match self {
                 Cell::Invalid => "X",
-                Cell::Valid => " ",
-                Cell::Cost(_) => "$",
+                Cell::Valid { cost } if *cost == 1 => " ",
+                Cell::Valid { .. } => "$",
             }
         )
     }
@@ -77,7 +76,7 @@ impl Map {
         Self {
             rows,
             columns,
-            cells: vec![vec![Cell::Valid; columns]; rows],
+            cells: vec![vec![Cell::Valid { cost: 1 }; columns]; rows],
         }
     }
 }
@@ -157,11 +156,10 @@ impl MapTrait for Map {
 
         let c = self.cells[node.row][node.col];
 
-        if c == Cell::Invalid {
-            return points.into_iter();
-        }
-
-        let move_cost = if let Cell::Cost(cost) = c { cost } else { 1 };
+        let move_cost = match c {
+            Cell::Valid { cost } => cost,
+            Cell::Invalid => return points.into_iter(),
+        };
 
         if node.row > 0 {
             points.push((
@@ -437,7 +435,7 @@ pub fn parse_img(img: &DynamicImage) -> Result<Map, anyhow::Error> {
             cells[row][col] = if p.0[0] < 128 {
                 Cell::Invalid
             } else {
-                Cell::Valid
+                Cell::Valid { cost: 1 }
             }
         }
     }
@@ -463,11 +461,51 @@ mod test {
                 vec![
                     Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
                 ],
-                vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-                vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-                vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
-                vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
-                vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
+                vec![
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                    Invalid,
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                ],
+                vec![
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                    Invalid,
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                ],
+                vec![
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Invalid,
+                ],
+                vec![
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                    Valid { cost: 1 },
+                    Invalid,
+                    Invalid,
+                    Invalid,
+                ],
+                vec![
+                    Invalid,
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                    Valid { cost: 1 },
+                ],
                 vec![
                     Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
                 ],
@@ -507,7 +545,7 @@ mod test {
     fn test_basic_shortcut() {
         let mut map = create_basic_map();
         // create higher cost shortcut
-        map.cells[3][2] = Cell::Cost(2);
+        map.cells[3][2] = Cell::Valid { cost: 2 };
         let visited = map.create_storage();
 
         let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
@@ -518,7 +556,7 @@ mod test {
         ));
 
         let visited = map.create_storage();
-        map.cells[3][2] = Cell::Cost(4);
+        map.cells[3][2] = Cell::Valid { cost: 4 };
 
         let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 
@@ -528,7 +566,7 @@ mod test {
         ));
 
         let visited = map.create_storage();
-        map.cells[3][2] = Cell::Cost(10);
+        map.cells[3][2] = Cell::Valid { cost: 10 };
 
         let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
 

@@ -65,26 +65,7 @@ fn register_canvas_scroll<T: FnMut(web_sys::WheelEvent) -> () + 'static>(
 
     closure.forget();
 }
-fn create_basic_map() -> Map {
-    use Cell::*;
-    Map {
-        rows: 7,
-        columns: 7,
-        cells: vec![
-            vec![
-                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
-            ],
-            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Invalid, Invalid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Valid, Valid, Valid, Invalid],
-            vec![Invalid, Valid, Invalid, Valid, Invalid, Invalid, Invalid],
-            vec![Invalid, Valid, Valid, Valid, Valid, Valid, Valid],
-            vec![
-                Invalid, Invalid, Invalid, Invalid, Invalid, Invalid, Invalid,
-            ],
-        ],
-    }
-}
+
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }

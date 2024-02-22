@@ -293,8 +293,9 @@ impl AppImpl<Map> {
                 }
             }
             Event::ButtonPressed(ButtonId::EditSave) => {
-                if let Some(selection) = &self.edit_selection {
-                    let cell = context.get_active_cell();
+                if let (Some(selection), Some(cell)) =
+                    (&self.edit_selection, context.get_active_cell())
+                {
                     for row in selection.start.row..=selection.end.row {
                         for col in selection.start.col..=selection.end.col {
                             self.map.cells[row][col] = cell;
@@ -430,8 +431,8 @@ impl AppImpl<Map> {
 
                 let color: String = match cell {
                     Cell::Invalid => "#000000".into(),
-                    Cell::Valid => "#FFFFFF".into(),
-                    Cell::Cost(_) => "#FFFF00".into(),
+                    Cell::Valid { cost: 1 } => "#FFFFFF".into(),
+                    Cell::Valid { .. } => "#FFFF00".into(),
                 };
 
                 ctx.set_fill_style(&color.into());

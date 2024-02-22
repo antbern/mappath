@@ -147,7 +147,7 @@ impl Context {
             inner.cell_selector.set_cell(cell);
         });
     }
-    pub fn get_active_cell(&self) -> Cell {
+    pub fn get_active_cell(&self) -> Option<Cell> {
         self.read(|inner| inner.cell_selector.get_cell())
     }
 }
@@ -163,15 +163,11 @@ pub struct CellSelector {
 impl CellSelector {
     pub fn set_cell(&self, cell: Cell) {
         debug!("setting cell: {:?}", cell);
-        self.input_valid_cost.set_disabled(true);
-        self.select_oneway.set_disabled(true);
 
         match cell {
             Cell::Invalid => self.radio_invalid.set_checked(true),
-            Cell::Valid => self.radio_valid.set_checked(true),
-            Cell::Cost(cost) => {
+            Cell::Valid { cost } => {
                 self.radio_valid.set_checked(true);
-                self.input_valid_cost.set_disabled(false);
                 self.input_valid_cost.set_value(&cost.to_string());
             } // Cell::OneWay => {
               //     self.radio_oneway.set_checked(true);
@@ -180,14 +176,14 @@ impl CellSelector {
         }
     }
 
-    pub fn get_cell(&self) -> Cell {
+    pub fn get_cell(&self) -> Option<Cell> {
         if self.radio_invalid.checked() {
-            Cell::Invalid
+            Some(Cell::Invalid)
         } else if self.radio_valid.checked() {
-            Cell::Valid
-        } else {
             let cost = self.input_valid_cost.value().parse().unwrap();
-            Cell::Cost(cost)
+            Some(Cell::Valid { cost })
+        } else {
+            None
         }
     }
 }
