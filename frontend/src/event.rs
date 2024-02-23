@@ -79,6 +79,17 @@ impl ButtonId {
         .iter()
         .copied()
     }
+
+    pub fn from_key_code(key: &str) -> Option<ButtonId> {
+        match key {
+            "r" => Some(ButtonId::Reset),
+            "t" => Some(ButtonId::Step),
+            "f" => Some(ButtonId::Finish),
+            "e" => Some(ButtonId::ToggleEdit),
+            "s" => Some(ButtonId::EditSave),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

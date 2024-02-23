@@ -4,7 +4,6 @@ use app::AppImpl;
 use context::{CellSelector, Context, ContextImpl, Input};
 use event::{ButtonId, CheckboxId};
 use log::debug;
-use optimize::{Cell, Map};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
 
@@ -260,6 +259,23 @@ fn main() -> Result<(), JsValue> {
                 request_repaint();
             },
         );
+    }
+    // setup key press handler for button shortcuts
+    {
+        let context = context.clone();
+        let request_repaint = request_repaint.clone();
+        let closure = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
+            move |event: web_sys::KeyboardEvent| {
+                if let Some(button) = event::ButtonId::from_key_code(&event.key()) {
+                    context.push_event(Event::ButtonPressed(button));
+                    request_repaint();
+                }
+            },
+        );
+        window()
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
     }
     // {
     //     let context = context.clone();
