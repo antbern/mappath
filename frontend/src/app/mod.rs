@@ -13,7 +13,13 @@ use web_sys::ImageData;
 
 const STORAGE_KEY_MAP: &str = "map";
 
-pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>> {
+pub(crate) trait AppMapTrait:
+    MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>
+{
+}
+impl<T> AppMapTrait for T where T: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de> {}
+
+pub struct AppImpl<M: AppMapTrait> {
     editing: bool,
     size: f64,
     map: M,
@@ -33,6 +39,7 @@ pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<
     // offset and scale in unit coordinates
     offset: (f64, f64),
     scale: f64,
+    mouse_select_state: Option<MouseSelectState<M>>,
 }
 
 struct Selection<R> {
@@ -40,8 +47,12 @@ struct Selection<R> {
     end: R,
 }
 
-struct FindState<M: MapTrait> {
+struct FindState<M: AppMapTrait> {
     pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
+}
+
+struct MouseSelectState<M: AppMapTrait> {
+    callback: Box<dyn FnOnce(&mut AppImpl<M>, &Context, MouseEvent)>,
 }
 
 impl AppImpl<Map> {
@@ -68,6 +79,7 @@ impl AppImpl<Map> {
             pan_start: None,
             offset: (0.0, 0.0),
             scale: 1.0,
+            mouse_select_state: None,
         };
         s.set_editing(false, context);
         s.on_map_change(context);
@@ -105,6 +117,20 @@ impl AppImpl<Map> {
             _ => {}
         }
         // handle the event depending on the current mode
+        if let Some(mouse_select_state) = self.mouse_select_state.take() {
+            if let Event::MouseReleased(event) = event {
+                (mouse_select_state.callback)(self, context, event);
+                return;
+            } else if let Event::ButtonPressed(ButtonId::SelectPoint) = event {
+                // cancel the selection
+                return;
+            }
+            self.mouse_select_state = Some(mouse_select_state);
+
+            // return to prevent any events from being delivered while selecting
+            return;
+        }
+
         if self.editing {
             self.handle_event_edit(event, context);
         } else {
@@ -263,6 +289,15 @@ impl AppImpl<Map> {
                 self.find_state = Some(FindState { pathfinder: finder });
 
                 self.on_map_change(context);
+            }
+            Event::ButtonPressed(ButtonId::SelectPoint) => {
+                self.mouse_select_state = Some(MouseSelectState {
+                    callback: Box::new(|app, context, event| {
+                        if let Some(point) = app.mouse_to_world_point_valid(event.x, event.y) {
+                            context.set_output(&format!("Selected point: {:?}", point));
+                        }
+                    }),
+                });
             }
             Event::MousePressed(MouseEvent {
                 x,
@@ -455,6 +490,19 @@ impl AppImpl<Map> {
         }
 
         ctx.restore();
+
+        // if we are in point selection mode, draw a crosshair at the mouse position
+        if let Some(MouseSelectState { .. }) = self.mouse_select_state {
+            if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
+                ctx.set_stroke_style(&"#FF0000".into());
+                ctx.begin_path();
+                ctx.move_to(x as f64, 0.0);
+                ctx.line_to(x as f64, canvas.height() as f64);
+                ctx.move_to(0.0, y as f64);
+                ctx.line_to(canvas.width() as f64, y as f64);
+                ctx.stroke();
+            }
+        }
     }
 
     fn render_map(&self, _context: &Context, ctx: &CanvasRenderingContext2d) {

@@ -49,6 +49,7 @@ pub enum ButtonId {
     LoadPreset,
     ClearStorage,
     EditSave,
+    SelectPoint,
 }
 
 impl ButtonId {
@@ -62,6 +63,7 @@ impl ButtonId {
             ButtonId::LoadPreset => "btn-load-preset",
             ButtonId::ClearStorage => "btn-clear-storage",
             ButtonId::EditSave => "btn-edit-save",
+            ButtonId::SelectPoint => "btn-select-point",
         }
     }
 
@@ -75,6 +77,7 @@ impl ButtonId {
             ButtonId::LoadPreset,
             ButtonId::ClearStorage,
             ButtonId::EditSave,
+            ButtonId::SelectPoint,
         ]
         .iter()
         .copied()
@@ -87,6 +90,7 @@ impl ButtonId {
             "f" => Some(ButtonId::Finish),
             "e" => Some(ButtonId::ToggleEdit),
             "s" => Some(ButtonId::EditSave),
+            "p" => Some(ButtonId::SelectPoint),
             _ => None,
         }
     }
