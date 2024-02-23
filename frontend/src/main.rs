@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
 use context::{CellSelector, Context, ContextImpl, Input};
-use event::{ButtonId, CheckboxId};
+use event::{ButtonId, CheckboxId, InputChange, InputId};
 use log::debug;
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
@@ -245,20 +245,29 @@ fn main() -> Result<(), JsValue> {
             request_repaint();
         });
     }
-
+    // setup change events for all inputs
     {
-        let context = context.clone();
-        let request_repaint = request_repaint.clone();
-        register_change_event(
-            "input-auto-step",
-            move |element: &web_sys::HtmlInputElement| {
-                context.push_event(Event::CheckboxChanged(
-                    CheckboxId::AutoStep,
-                    element.checked(),
-                ));
+        for input in InputId::iterate() {
+            let context = context.clone();
+            let request_repaint = request_repaint.clone();
+            register_change_event(input.id_str(), move |event: &web_sys::HtmlInputElement| {
+                context.push_event(Event::InputChanged(match input {
+                    InputId::Number(id) => InputChange::Number {
+                        id,
+                        value: event.value().parse().unwrap(),
+                    },
+                    InputId::Checkbox(id) => InputChange::Checkbox {
+                        id,
+                        value: event.checked(),
+                    },
+                    InputId::Select(id) => InputChange::Select {
+                        id,
+                        value: event.value(),
+                    },
+                }));
                 request_repaint();
-            },
-        );
+            });
+        }
     }
     // setup key press handler for button shortcuts
     {

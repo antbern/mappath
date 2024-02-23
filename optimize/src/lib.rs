@@ -5,7 +5,8 @@ use std::{
     cmp::Ordering,
     collections::BinaryHeap,
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut}, str::FromStr,
+    ops::{Deref, DerefMut},
+    str::FromStr,
 };
 
 use image::{DynamicImage, GenericImageView};
@@ -16,6 +17,12 @@ pub enum Cell {
     Invalid,
     Valid { cost: usize },
     OneWay { cost: usize, direction: Direction },
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -122,6 +129,24 @@ impl Map {
             columns,
             cells: vec![vec![Cell::Valid { cost: 1 }; columns]; rows],
         }
+    }
+
+    pub fn resize(&mut self, columns: usize, rows: usize) {
+        // create container for holding new cells
+        let mut new_cells = vec![vec![Cell::default(); columns]; rows];
+
+        // copy old cells into new container, or fill with default if new size is larger (already
+        // done above)
+        for row in 0..self.rows.min(rows) {
+            for col in 0..self.columns.min(columns) {
+                new_cells[row][col] = self.cells[row][col];
+            }
+        }
+
+        // finally replace the cells with the new container
+        self.rows = rows;
+        self.columns = columns;
+        self.cells = new_cells;
     }
 }
 

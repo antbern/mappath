@@ -13,6 +13,8 @@ use web_sys::HtmlSelectElement;
 
 use crate::event::ButtonId;
 use crate::event::Event;
+use crate::event::InputChange;
+use crate::event::InputId;
 use crate::event::MouseEvent;
 
 #[derive(Clone)]
@@ -150,6 +152,49 @@ impl Context {
     pub fn get_active_cell(&self) -> Option<Cell> {
         self.read(|inner| inner.cell_selector.get_cell())
     }
+
+    pub fn get_input_value(&self, id: InputId) -> InputChange {
+        self.read(|inner| {
+            let input: HtmlInputElement = inner
+                .document
+                .get_element_by_id(id.id_str())
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+
+            match id {
+                InputId::Number(id) => InputChange::Number {
+                    id,
+                    value: input.value().parse().unwrap(),
+                },
+                InputId::Checkbox(id) => InputChange::Checkbox {
+                    id,
+                    value: input.checked(),
+                },
+                InputId::Select(id) => InputChange::Select {
+                    id,
+                    value: input.value(),
+                },
+            }
+        })
+    }
+
+    pub fn set_input_value(&self, change: &InputChange) {
+        self.write(|inner| {
+            let input: HtmlInputElement = inner
+                .document
+                .get_element_by_id(change.id_str())
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+
+            match change {
+                InputChange::Number { value, .. } => input.set_value(&value.to_string()),
+                InputChange::Checkbox { value, .. } => input.set_checked(*value),
+                InputChange::Select { value, .. } => input.set_value(value),
+            }
+        });
+    }
 }
 
 pub struct CellSelector {
@@ -188,7 +233,7 @@ impl CellSelector {
             let cost = self.input_valid_cost.value().parse().unwrap();
             let direction = self.select_oneway.value().parse().unwrap();
             Some(Cell::OneWay { cost, direction })
-        }else {
+        } else {
             None
         }
     }

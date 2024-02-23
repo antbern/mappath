@@ -1,5 +1,7 @@
 use crate::context::Context;
-use crate::event::{ButtonId, CheckboxId, Event, MouseButton, MouseEvent};
+use crate::event::{
+    ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId,
+};
 use crate::App;
 
 use log::debug;
@@ -13,8 +15,6 @@ const STORAGE_KEY_MAP: &str = "map";
 
 pub struct AppImpl<M: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>> {
     editing: bool,
-    rows: usize,
-    cols: usize,
     size: f64,
     map: M,
 
@@ -56,8 +56,6 @@ impl AppImpl<Map> {
 
         let mut s = Self {
             editing: false,
-            rows: map.rows,
-            cols: map.columns,
             map,
             size: 10.0,
             find_state: None,
@@ -72,6 +70,7 @@ impl AppImpl<Map> {
             scale: 1.0,
         };
         s.set_editing(false, context);
+        s.on_map_change(context);
         s
     }
 }
@@ -99,7 +98,10 @@ impl AppImpl<Map> {
                 }
             }
             Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
-            Event::CheckboxChanged(CheckboxId::AutoStep, checked) => self.auto_step = checked,
+            Event::InputChanged(InputChange::Checkbox {
+                id: CheckboxId::AutoStep,
+                value: checked,
+            }) => self.auto_step = checked,
             _ => {}
         }
         // handle the event depending on the current mode
@@ -254,13 +256,13 @@ impl AppImpl<Map> {
 
                 let finder = PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
 
-                self.rows = map.rows;
-                self.cols = map.columns;
                 self.map = map;
                 self.goal = Some(goal);
                 self.start = Some(start);
 
                 self.find_state = Some(FindState { pathfinder: finder });
+
+                self.on_map_change(context);
             }
             Event::MousePressed(MouseEvent {
                 x,
@@ -324,8 +326,39 @@ impl AppImpl<Map> {
                     }
                 }
             }
+            Event::InputChanged(change) => match change {
+                InputChange::Number {
+                    id: NumberInputId::Rows,
+                    value,
+                } => {
+                    // resize the map
+                    self.map.resize(self.map.columns, value as usize);
+                    self.on_map_change(context);
+                }
+                InputChange::Number {
+                    id: NumberInputId::Cols,
+                    value,
+                } => {
+                    // resize the map
+                    self.map.resize(value as usize, self.map.rows);
+                    self.on_map_change(context);
+                }
+                _ => {}
+            },
             _ => {}
         }
+    }
+
+    fn on_map_change(&mut self, context: &Context) {
+        // we have a new map, make sure everything is up to date
+        context.set_input_value(&InputChange::Number {
+            id: NumberInputId::Rows,
+            value: self.map.rows as f64,
+        });
+        context.set_input_value(&InputChange::Number {
+            id: NumberInputId::Cols,
+            value: self.map.columns as f64,
+        });
     }
 
     fn handle_event_path_find(&mut self, event: Event, context: &Context) {

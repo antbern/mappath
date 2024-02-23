@@ -4,7 +4,7 @@
 pub enum Event {
     ButtonPressed(ButtonId),
     SelectChanged(SelectId, String),
-    CheckboxChanged(CheckboxId, bool),
+    InputChanged(InputChange),
     MouseMove(MouseEvent),
     MouseEnter(MouseEvent),
     MouseLeave(MouseEvent),
@@ -113,7 +113,22 @@ impl MouseButton {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectId {
-    Mode,
+    // Mode,
+}
+
+impl SelectId {
+    pub fn id_str(&self) -> &str {
+        match self {
+            // SelectId::Mode => "select-mode",
+            _ => todo!(),
+        }
+    }
+    pub fn iterate() -> impl Iterator<Item = SelectId> {
+        [
+            //SelectId::Mode
+        ]
+        .into_iter()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,8 +136,70 @@ pub enum CheckboxId {
     AutoStep,
 }
 
-enum Widget {
-    Button(ButtonId),
+impl CheckboxId {
+    pub fn id_str(&self) -> &str {
+        match self {
+            CheckboxId::AutoStep => "input-auto-step",
+        }
+    }
+    pub fn iterate() -> impl Iterator<Item = CheckboxId> {
+        [CheckboxId::AutoStep].into_iter()
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumberInputId {
+    Rows,
+    Cols,
+}
+impl NumberInputId {
+    pub fn id_str(&self) -> &str {
+        match self {
+            NumberInputId::Rows => "input-rows",
+            NumberInputId::Cols => "input-cols",
+        }
+    }
+    pub fn iterate() -> impl Iterator<Item = NumberInputId> {
+        [NumberInputId::Rows, NumberInputId::Cols].into_iter()
+    }
+}
+
+/// Event to fire or to emit when an input changes
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputChange {
+    Number { id: NumberInputId, value: f64 },
+    Checkbox { id: CheckboxId, value: bool },
+    Select { id: SelectId, value: String },
+}
+impl InputChange {
+    pub fn id_str(&self) -> &str {
+        match self {
+            InputChange::Number { id, .. } => id.id_str(),
+            InputChange::Checkbox { id, .. } => id.id_str(),
+            InputChange::Select { id, .. } => id.id_str(),
+        }
+    }
+}
+
+/// Used for querying the input state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputId {
+    Number(NumberInputId),
+    Checkbox(CheckboxId),
     Select(SelectId),
-    // Checkbox(CheckboxId),
+}
+
+impl InputId {
+    pub fn id_str(&self) -> &str {
+        match self {
+            InputId::Number(id) => id.id_str(),
+            InputId::Checkbox(id) => id.id_str(),
+            InputId::Select(id) => id.id_str(),
+        }
+    }
+    pub fn iterate() -> impl Iterator<Item = InputId> {
+        NumberInputId::iterate()
+            .map(InputId::Number)
+            .chain(CheckboxId::iterate().map(InputId::Checkbox))
+            .chain(SelectId::iterate().map(InputId::Select))
+    }
 }
