@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use app::AppImpl;
 use context::{CellSelector, Context, ContextImpl, Input};
-use event::{ButtonId, CheckboxId, InputChange, InputId};
+use event::{ButtonId, InputChange, InputId};
 use log::debug;
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
@@ -15,7 +15,8 @@ mod event;
 
 /// The main entry point for the application
 pub trait App {
-    fn render(&mut self, ctx: &Context, rendering_ctx: &CanvasRenderingContext2d);
+    #[allow(async_fn_in_trait)]
+    async fn render(&mut self, ctx: &Context, rendering_ctx: &CanvasRenderingContext2d);
 }
 
 fn register_onclick<T: FnMut() -> () + 'static>(id: &str, callback: T) {
@@ -87,12 +88,7 @@ fn get_element_by_id<T: JsCast>(id: &str) -> T {
         ))
 }
 
-fn request_animation_frame(f: &Closure<dyn FnMut()>) {
-    window()
-        .request_animation_frame(f.as_ref().unchecked_ref())
-        .expect("should register `requestAnimationFrame` OK");
-}
-fn main() -> Result<(), JsValue> {
+fn main() {
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
 
@@ -158,12 +154,24 @@ fn main() -> Result<(), JsValue> {
     });
 
     // create cells for storing the closure that redraws the canvas
-    let redraw = Rc::new(RefCell::new(None));
+    let redraw: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
 
     let request_repaint = {
         let redraw = redraw.clone();
         move || {
-            request_animation_frame(redraw.borrow().as_ref().unwrap());
+            debug!("request_repaint called, registering animation frame");
+            window()
+                .request_animation_frame(
+                    redraw
+                        .borrow()
+                        .as_ref()
+                        .expect("should convert ok")
+                        .as_ref()
+                        .unchecked_ref(),
+                )
+                .expect("should register `requestAnimationFrame` OK");
+
+            // request_animation_frame(redraw.borrow().as_ref().unwrap());
         }
     };
 
@@ -196,7 +204,7 @@ fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "mousedown", move |event: web_sys::MouseEvent| {
-            if let Some(button) = event::MouseButton::from_web_button(event.button()) {
+            if let Some(_button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MousePressed(event.into()));
                 request_repaint();
             }
@@ -206,7 +214,7 @@ fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "mouseup", move |event: web_sys::MouseEvent| {
-            if let Some(button) = event::MouseButton::from_web_button(event.button()) {
+            if let Some(_button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MouseReleased(event.into()));
                 request_repaint();
             }
@@ -216,7 +224,7 @@ fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let request_repaint = request_repaint.clone();
         register_canvas_event(&canvas, "click", move |event: web_sys::MouseEvent| {
-            if let Some(button) = event::MouseButton::from_web_button(event.button()) {
+            if let Some(_button) = event::MouseButton::from_web_button(event.button()) {
                 context.push_event(Event::MouseClicked(event.into()));
                 request_repaint();
             }
@@ -298,29 +306,35 @@ fn main() -> Result<(), JsValue> {
     //     );
     // }
 
-    // register animation frame function
-    //
     // create a closure that will be called by the browser's animation frame
     *redraw.borrow_mut() = Some(Closure::<dyn FnMut()>::new({
         let context = context.clone();
         let request_repaint = request_repaint.clone();
 
-        // initialize the app
-        let mut app = AppImpl::new(&context);
+        // initialize the app and put it in a refcell
+        let app: AppImpl<optimize::Map> = AppImpl::new(&context);
+        let app = Rc::new(RefCell::new(app));
+
+        let rendering_context = Rc::new(rendering_context);
 
         move || {
-            debug!("redraw");
-            app.render(&context, &rendering_context);
+            // we need to clone everything so that the block sent to spawn_local is 'static
+            let context = context.clone();
+            let request_repaint = request_repaint.clone();
+            let rendering_context = rendering_context.clone();
+            let app = app.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                debug!("redraw");
+                app.borrow_mut().render(&context, &rendering_context).await;
 
-            // if the app requested to be repainted, schedule another call
-            if context.is_repaint_requested() {
-                debug!("repaint requested");
-                request_repaint();
-            }
+                // if the app requested to be repainted, schedule another call
+                if context.is_repaint_requested() {
+                    debug!("repaint requested");
+                    request_repaint();
+                }
+            });
         }
     }));
     // initial call to the animation frame function
     request_repaint();
-
-    Ok(())
 }

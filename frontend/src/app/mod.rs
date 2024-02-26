@@ -8,8 +8,8 @@ use log::debug;
 use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
 use wasm_bindgen::Clamped;
-use web_sys::CanvasRenderingContext2d;
 use web_sys::ImageData;
+use web_sys::{CanvasRenderingContext2d, ImageBitmap};
 
 const STORAGE_KEY_MAP: &str = "map";
 
@@ -40,6 +40,9 @@ pub struct AppImpl<M: AppMapTrait> {
     offset: (f64, f64),
     scale: f64,
     mouse_select_state: Option<MouseSelectState<M>>,
+    // background stuff
+    background: Option<Background>,
+    map_alpha: f64,
 }
 
 struct Selection<R> {
@@ -53,6 +56,12 @@ struct FindState<M: AppMapTrait> {
 
 struct MouseSelectState<M: AppMapTrait> {
     callback: Box<dyn FnOnce(&mut AppImpl<M>, &Context, MouseEvent)>,
+}
+
+struct Background {
+    image: ImageBitmap,
+    scale: f64,
+    alpha: f64,
 }
 
 impl AppImpl<Map> {
@@ -80,6 +89,8 @@ impl AppImpl<Map> {
             offset: (0.0, 0.0),
             scale: 1.0,
             mouse_select_state: None,
+            background: None,
+            map_alpha: 0.8,
         };
         s.set_editing(false, context);
         s.on_map_change(context);
@@ -88,12 +99,12 @@ impl AppImpl<Map> {
 }
 
 impl App for AppImpl<Map> {
-    fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
+    async fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
             // give the event to panning and zooming first, and if it was not handled, give it to the app
             if !self.handle_event_panning(&event) {
-                self.handle_event(event, context);
+                self.handle_event(event, context).await;
             }
         }
 
@@ -101,7 +112,7 @@ impl App for AppImpl<Map> {
     }
 }
 impl AppImpl<Map> {
-    fn handle_event(&mut self, event: Event, context: &Context) {
+    async fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
             Event::ButtonPressed(ButtonId::ClearStorage) => {
@@ -132,7 +143,7 @@ impl AppImpl<Map> {
         }
 
         if self.editing {
-            self.handle_event_edit(event, context);
+            self.handle_event_edit(event, context).await;
         } else {
             self.handle_event_path_find(event, context);
         }
@@ -255,7 +266,7 @@ impl AppImpl<Map> {
         }
     }
 
-    fn handle_event_edit(&mut self, event: Event, context: &Context) {
+    async fn handle_event_edit(&mut self, event: Event, context: &Context) {
         match event {
             Event::ButtonPressed(ButtonId::LoadPreset) => {
                 // load the image by including the bytes in the compilation
@@ -265,12 +276,30 @@ impl AppImpl<Map> {
                 let rgba_image = image.to_rgba8();
 
                 let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
-                let _image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
+                let image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
                     clamped_buf,
                     image.width(),
                     image.height(),
                 )
                 .unwrap();
+
+                // TODO: we have to somehow get the value out of the Promise
+                let jsimage = web_sys::window()
+                    .expect("no global `window` exists")
+                    .create_image_bitmap_with_image_data(&image_data_temp)
+                    .unwrap();
+
+                let jsimage = wasm_bindgen_futures::JsFuture::from(jsimage)
+                    .await
+                    .unwrap()
+                    .into();
+
+                debug!("loaded background image");
+                self.background = Some(Background {
+                    image: jsimage,
+                    scale: 1.0,
+                    alpha: 0.8,
+                });
 
                 let map = parse_img(&image).unwrap();
 
@@ -465,10 +494,22 @@ impl AppImpl<Map> {
             .unwrap();
         ctx.scale(self.scale, self.scale).unwrap();
 
-        // TODO: implement panning and zooming to translate and scale the map further
+        // TODO: draw background image with alpha
+        if let Some(background) = &self.background {
+            ctx.set_global_alpha(background.alpha);
+            ctx.draw_image_with_image_bitmap_and_dw_and_dh(
+                &background.image,
+                0.0,
+                0.0,
+                background.image.width() as f64 * background.scale,
+                background.image.height() as f64 * background.scale,
+            )
+            .unwrap();
+        }
+
+        ctx.set_global_alpha(self.map_alpha);
 
         // render based on the current mode
-
         if self.editing {
             self.render_app_edit(context, ctx);
         } else {
