@@ -3,15 +3,15 @@ use crate::event::{
     ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId, SelectId,
 };
 use crate::App;
-use std::io::Cursor;
-
 use image::{DynamicImage, GenericImageView};
 use log::debug;
 use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
+use std::io::Cursor;
 use wasm_bindgen::Clamped;
-use web_sys::ImageData;
+use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, ImageBitmap};
+use web_sys::{HtmlInputElement, ImageData};
 
 const STORAGE_KEY_MAP: &str = "map";
 const STORAGE_KEY_BACKGROUND: &str = "background";
@@ -500,6 +500,32 @@ impl AppImpl<Map> {
                 };
 
                 match preset.as_str() {
+                    "file" => {
+                        // open the file in the file picker
+                        let window = web_sys::window().unwrap();
+                        let file_element: HtmlInputElement = window
+                            .document()
+                            .unwrap()
+                            .get_element_by_id("input-file")
+                            .unwrap()
+                            .dyn_into::<web_sys::HtmlInputElement>()
+                            .unwrap();
+
+                        if let Some(file_list) = file_element.files() {
+                            if let Some(file) = gloo::file::FileList::from(file_list).iter().next()
+                            {
+                                let res = gloo::file::futures::read_as_bytes(file).await;
+                                match res {
+                                    Ok(bytes) => {
+                                        self.set_background(&bytes).await;
+                                    }
+                                    Err(e) => {
+                                        context.set_output(&format!("Error reading file: {:?}", e));
+                                    }
+                                }
+                            }
+                        }
+                    }
                     "maze" => {
                         self.set_background(include_bytes!(
                             "../../../data/maze-03_6_threshold.png"
