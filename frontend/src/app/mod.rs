@@ -466,6 +466,10 @@ impl AppImpl<Map> {
                         ))
                         .await;
                     }
+                    "maze_map" => {
+                        self.set_background(include_bytes!("../../../data/map_maze.png"))
+                            .await;
+                    }
                     _ => {}
                 }
             }
