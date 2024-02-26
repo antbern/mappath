@@ -45,6 +45,8 @@ pub struct AppImpl<M: AppMapTrait> {
     background: Option<Background>,
     map_alpha: f64,
     background_alpha: f64,
+
+    draw_grid: bool,
 }
 
 struct Selection<R> {
@@ -94,6 +96,7 @@ impl AppImpl<Map> {
             background: None,
             map_alpha: 0.8,
             background_alpha: 0.8,
+            draw_grid: true,
         };
         s.set_editing(false, context);
         s.on_map_change(context);
@@ -128,6 +131,10 @@ impl AppImpl<Map> {
                 id: CheckboxId::AutoStep,
                 value: checked,
             }) => self.auto_step = checked,
+            Event::InputChanged(InputChange::Checkbox {
+                id: CheckboxId::DrawGrid,
+                value,
+            }) => self.draw_grid = value,
             Event::InputChanged(InputChange::Number {
                 id: NumberInputId::BackgroundAlpha,
                 value,
@@ -602,7 +609,7 @@ impl AppImpl<Map> {
         ctx.save();
         // let total_scale = self.scale * self.size;
         // ctx.scale(total_scale, total_scale).unwrap();
-        ctx.set_line_width(1.0 / (self.scale * self.size));
+        ctx.set_line_width(1.0 / self.size);
 
         ctx.scale(self.size, self.size).unwrap();
         ctx.translate(self.offset.0 * self.scale, self.offset.1 * self.scale)
@@ -678,19 +685,20 @@ impl AppImpl<Map> {
                 ctx.fill_rect(col as f64, row as f64, 1.0, 1.0);
             }
         }
-
-        // draw lines between all the cells
-        ctx.set_stroke_style(&"#000000".into());
-        ctx.begin_path();
-        for row in 0..=self.map.rows {
-            ctx.move_to(0.0, row as f64);
-            ctx.line_to(self.map.columns as f64, row as f64);
+        if self.draw_grid {
+            // draw lines between all the cells
+            ctx.set_stroke_style(&"#000000".into());
+            ctx.begin_path();
+            for row in 0..=self.map.rows {
+                ctx.move_to(0.0, row as f64);
+                ctx.line_to(self.map.columns as f64, row as f64);
+            }
+            for col in 0..=self.map.columns {
+                ctx.move_to(col as f64, 0.0);
+                ctx.line_to(col as f64, self.map.rows as f64);
+            }
+            ctx.stroke();
         }
-        for col in 0..=self.map.columns {
-            ctx.move_to(col as f64, 0.0);
-            ctx.line_to(col as f64, self.map.rows as f64);
-        }
-        ctx.stroke();
     }
 
     fn draw_neighbors(&self, point: &Point, ctx: &CanvasRenderingContext2d, style: &str) {

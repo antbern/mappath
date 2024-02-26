@@ -143,16 +143,18 @@ impl SelectId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckboxId {
     AutoStep,
+    DrawGrid,
 }
 
 impl CheckboxId {
     pub fn id_str(&self) -> &str {
         match self {
             CheckboxId::AutoStep => "input-auto-step",
+            CheckboxId::DrawGrid => "input-draw-grid",
         }
     }
     pub fn iterate() -> impl Iterator<Item = CheckboxId> {
-        [CheckboxId::AutoStep].into_iter()
+        [CheckboxId::AutoStep, CheckboxId::DrawGrid].into_iter()
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
