@@ -243,18 +243,19 @@ impl AppImpl<Map> {
                 delta_y,
             } => {
                 let (x, y) = self.mouse_to_world(*x, *y);
+                // x and y need to be the location on the canvas, not in the world
+                let (x, y) = (x + self.offset.0, y + self.offset.1);
 
-                let scale_factor = 1.02;
+                let scale_factor = 1.05;
                 let scale_factor = if *delta_y > 0.0 {
                     scale_factor
                 } else {
                     1.0 / scale_factor
                 };
 
-                self.offset.0 = x + (self.offset.0 - x) * scale_factor;
-                self.offset.1 = y + (self.offset.1 - y) * scale_factor;
-
                 self.scale *= scale_factor;
+                self.offset.0 -= x * (1.0 - 1.0 / scale_factor);
+                self.offset.1 -= y * (1.0 - 1.0 / scale_factor);
 
                 true
             }
