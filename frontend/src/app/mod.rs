@@ -420,6 +420,23 @@ impl AppImpl<Map> {
                 }
                 _ => {}
             },
+
+            Event::ButtonPressed(ButtonId::AutoScale) => {
+                if let Some(background) = &mut self.background {
+                    let InputChange::Number { id: _, value: ppc } = context.get_input_value(
+                        crate::event::InputId::Number(NumberInputId::AutoScaleFactor),
+                    ) else {
+                        unreachable!()
+                    };
+
+                    let rows = background.image.height() as f64 / ppc;
+                    let cols = background.image.width() as f64 / ppc;
+                    self.map.resize(cols as usize, rows as usize);
+                    background.scale = 1.0 / ppc;
+                    self.on_map_change(context);
+                }
+            }
+
             _ => {}
         }
     }
@@ -434,6 +451,35 @@ impl AppImpl<Map> {
             id: NumberInputId::Cols,
             value: self.map.columns as f64,
         });
+
+        // make sure all selections etc are within bounds
+        if let Some(selection) = &mut self.edit_selection {
+            selection.start.row = selection.start.row.min(self.map.rows - 1);
+            selection.start.col = selection.start.col.min(self.map.columns - 1);
+            selection.end.row = selection.end.row.min(self.map.rows - 1);
+            selection.end.col = selection.end.col.min(self.map.columns - 1);
+        }
+
+        if let Some(start) = &mut self.start {
+            start.row = start.row.min(self.map.rows - 1);
+            start.col = start.col.min(self.map.columns - 1);
+        }
+
+        if let Some(goal) = &mut self.goal {
+            goal.row = goal.row.min(self.map.rows - 1);
+            goal.col = goal.col.min(self.map.columns - 1);
+        }
+
+        // also need to reset the pathfinder
+        if let (Some(start), Some(goal)) = (self.start, self.goal) {
+            self.find_state = Some(FindState {
+                pathfinder: PathFinder::new(
+                    start,
+                    goal,
+                    self.map.create_storage::<Visited<Point>>(),
+                ),
+            });
+        }
     }
 
     fn handle_event_path_find(&mut self, event: Event, _context: &Context) {

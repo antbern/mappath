@@ -50,6 +50,7 @@ pub enum ButtonId {
     ClearStorage,
     EditSave,
     SelectPoint,
+    AutoScale,
 }
 
 impl ButtonId {
@@ -64,6 +65,7 @@ impl ButtonId {
             ButtonId::ClearStorage => "btn-clear-storage",
             ButtonId::EditSave => "btn-edit-save",
             ButtonId::SelectPoint => "btn-select-point",
+            ButtonId::AutoScale => "btn-auto-scale",
         }
     }
 
@@ -78,6 +80,7 @@ impl ButtonId {
             ButtonId::ClearStorage,
             ButtonId::EditSave,
             ButtonId::SelectPoint,
+            ButtonId::AutoScale,
         ]
         .iter()
         .copied()
@@ -156,6 +159,8 @@ pub enum NumberInputId {
     Cols,
     BackgroundAlpha,
     ForegroundAlpha,
+    BackgroundScale,
+    AutoScaleFactor,
 }
 impl NumberInputId {
     pub fn id_str(&self) -> &str {
@@ -164,6 +169,8 @@ impl NumberInputId {
             NumberInputId::Cols => "input-cols",
             NumberInputId::BackgroundAlpha => "input-background-alpha",
             NumberInputId::ForegroundAlpha => "input-foreground-alpha",
+            NumberInputId::BackgroundScale => "input-background-scale",
+            NumberInputId::AutoScaleFactor => "input-auto-scale-factor",
         }
     }
     pub fn iterate() -> impl Iterator<Item = NumberInputId> {
@@ -172,6 +179,8 @@ impl NumberInputId {
             NumberInputId::Cols,
             NumberInputId::BackgroundAlpha,
             NumberInputId::ForegroundAlpha,
+            NumberInputId::BackgroundScale,
+            NumberInputId::AutoScaleFactor,
         ]
         .into_iter()
     }
