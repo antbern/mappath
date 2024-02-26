@@ -52,6 +52,7 @@ pub enum ButtonId {
     SelectPoint,
     AutoScale,
     AutoCreateMap,
+    LoadBackground,
 }
 
 impl ButtonId {
@@ -68,6 +69,7 @@ impl ButtonId {
             ButtonId::SelectPoint => "btn-select-point",
             ButtonId::AutoScale => "btn-auto-scale",
             ButtonId::AutoCreateMap => "btn-auto-create-map",
+            ButtonId::LoadBackground => "btn-load-background",
         }
     }
 
@@ -84,6 +86,7 @@ impl ButtonId {
             ButtonId::SelectPoint,
             ButtonId::AutoScale,
             ButtonId::AutoCreateMap,
+            ButtonId::LoadBackground,
         ]
         .iter()
         .copied()
@@ -123,21 +126,17 @@ impl MouseButton {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectId {
-    // Mode,
+    BackgroundPreset,
 }
 
 impl SelectId {
     pub fn id_str(&self) -> &str {
         match self {
-            // SelectId::Mode => "select-mode",
-            _ => todo!(),
+            SelectId::BackgroundPreset => "input-select-background",
         }
     }
     pub fn iterate() -> impl Iterator<Item = SelectId> {
-        [
-            //SelectId::Mode
-        ]
-        .into_iter()
+        [SelectId::BackgroundPreset].into_iter()
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::event::{
-    ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId,
+    ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId, SelectId,
 };
 use crate::App;
 
@@ -284,58 +284,27 @@ impl AppImpl<Map> {
         match event {
             Event::ButtonPressed(ButtonId::LoadPreset) => {
                 // load the image by including the bytes in the compilation
-                let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
-                let dynamic_image =
-                    image::load_from_memory(image_bytes).expect("could not load image");
 
-                let rgba_image = dynamic_image.to_rgba8();
+                self.set_background(include_bytes!("../../../data/maze-03_6_threshold.png"))
+                    .await;
 
-                let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
-                let image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
-                    clamped_buf,
-                    dynamic_image.width(),
-                    dynamic_image.height(),
-                )
-                .unwrap();
+                if let Some(background) = &self.background {
+                    let map = parse_img(&background.image_data).unwrap();
 
-                // get pixel color at 0,0
-                //
-                // TODO: we have to somehow get the value out of the Promise
-                let jsimage = web_sys::window()
-                    .expect("no global `window` exists")
-                    .create_image_bitmap_with_image_data(&image_data_temp)
-                    .unwrap();
+                    let start = Point { row: 14, col: 0 };
+                    let goal = Point { row: 44, col: 51 };
 
-                let jsimage = wasm_bindgen_futures::JsFuture::from(jsimage)
-                    .await
-                    .unwrap()
-                    .into();
+                    let finder =
+                        PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
 
-                debug!("loaded background image");
+                    self.map = map;
+                    self.goal = Some(goal);
+                    self.start = Some(start);
 
-                let map = parse_img(&dynamic_image).unwrap();
+                    self.find_state = Some(FindState { pathfinder: finder });
 
-                self.background = Some(Background {
-                    image_data: dynamic_image,
-                    image: jsimage,
-                    scale: 1.0,
-                });
-
-                // let mut map = create_basic_map();
-                // map.cells[3][2] = Cell::Cost(4);
-
-                let start = Point { row: 14, col: 0 };
-                let goal = Point { row: 44, col: 51 };
-
-                let finder = PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
-
-                self.map = map;
-                self.goal = Some(goal);
-                self.start = Some(start);
-
-                self.find_state = Some(FindState { pathfinder: finder });
-
-                self.on_map_change(context);
+                    self.on_map_change(context);
+                }
             }
             Event::ButtonPressed(ButtonId::SelectPoint) => {
                 self.mouse_select_state = Some(MouseSelectState {
@@ -473,9 +442,61 @@ impl AppImpl<Map> {
                     });
                 }
             }
+            Event::ButtonPressed(ButtonId::LoadBackground) => {
+                let InputChange::Select {
+                    id: _,
+                    value: preset,
+                } = context
+                    .get_input_value(crate::event::InputId::Select(SelectId::BackgroundPreset))
+                else {
+                    unreachable!()
+                };
+
+                match preset.as_str() {
+                    "maze" => {
+                        self.set_background(include_bytes!(
+                            "../../../data/maze-03_6_threshold.png"
+                        ))
+                        .await;
+                    }
+                    _ => {}
+                }
+            }
 
             _ => {}
         }
+    }
+
+    async fn set_background(&mut self, bytes: &[u8]) {
+        let dynamic_image = image::load_from_memory(bytes).expect("could not load image");
+
+        let rgba_image = dynamic_image.to_rgba8();
+
+        let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
+        let image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
+            clamped_buf,
+            dynamic_image.width(),
+            dynamic_image.height(),
+        )
+        .unwrap();
+
+        let jsimage = web_sys::window()
+            .expect("no global `window` exists")
+            .create_image_bitmap_with_image_data(&image_data_temp)
+            .unwrap();
+
+        let jsimage = wasm_bindgen_futures::JsFuture::from(jsimage)
+            .await
+            .unwrap()
+            .into();
+
+        debug!("loaded background image");
+
+        self.background = Some(Background {
+            image_data: dynamic_image,
+            image: jsimage,
+            scale: 1.0,
+        });
     }
 
     fn on_map_change(&mut self, context: &Context) {
@@ -810,11 +831,25 @@ fn fill_map_from_image(
             let (x, y) = (x as u32, y as u32);
             let pixel = image.get_pixel(x, y);
 
-            if pixel == *color {
+            let diff = pixel_difference_norm(&pixel, color);
+
+            if diff < 10.0 {
                 map.cells[row][col] = Cell::Valid { cost: 1 };
             } else {
                 map.cells[row][col] = Cell::Invalid;
             }
         }
     }
+}
+
+fn pixel_difference_norm(a: &image::Rgba<u8>, b: &image::Rgba<u8>) -> f64 {
+    let a = a.0;
+    let b = b.0;
+    let diff = [
+        (a[0] as f64 - b[0] as f64).abs(),
+        (a[1] as f64 - b[1] as f64).abs(),
+        (a[2] as f64 - b[2] as f64).abs(),
+    ];
+    let diff = (diff[0].powi(2) + diff[1].powi(2) + diff[2].powi(2)).sqrt();
+    diff
 }

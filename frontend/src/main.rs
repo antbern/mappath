@@ -256,25 +256,45 @@ fn main() {
     // setup change events for all inputs
     {
         for input in InputId::iterate() {
-            let context = context.clone();
-            let request_repaint = request_repaint.clone();
-            register_change_event(input.id_str(), move |event: &web_sys::HtmlInputElement| {
-                context.push_event(Event::InputChanged(match input {
-                    InputId::Number(id) => InputChange::Number {
-                        id,
-                        value: event.value().parse().unwrap(),
-                    },
-                    InputId::Checkbox(id) => InputChange::Checkbox {
-                        id,
-                        value: event.checked(),
-                    },
-                    InputId::Select(id) => InputChange::Select {
-                        id,
-                        value: event.value(),
-                    },
-                }));
-                request_repaint();
-            });
+            match input {
+                InputId::Select(id) => {
+                    let context = context.clone();
+                    let request_repaint = request_repaint.clone();
+
+                    register_change_event(
+                        id.id_str(),
+                        move |select: &web_sys::HtmlSelectElement| {
+                            context.push_event(Event::InputChanged(InputChange::Select {
+                                id,
+                                value: select.value(),
+                            }));
+                            request_repaint();
+                        },
+                    );
+                }
+                _ => {
+                    let context = context.clone();
+                    let request_repaint = request_repaint.clone();
+
+                    register_change_event(
+                        input.id_str(),
+                        move |event: &web_sys::HtmlInputElement| {
+                            context.push_event(Event::InputChanged(match input {
+                                InputId::Number(id) => InputChange::Number {
+                                    id,
+                                    value: event.value().parse().unwrap(),
+                                },
+                                InputId::Checkbox(id) => InputChange::Checkbox {
+                                    id,
+                                    value: event.checked(),
+                                },
+                                InputId::Select(_) => unreachable!(),
+                            }));
+                            request_repaint();
+                        },
+                    );
+                }
+            }
         }
     }
     // setup key press handler for button shortcuts

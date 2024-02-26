@@ -155,6 +155,20 @@ impl Context {
 
     pub fn get_input_value(&self, id: InputId) -> InputChange {
         self.read(|inner| {
+            // handle select separately since it is not an input element
+            if let InputId::Select(id) = id {
+                let select: HtmlSelectElement = inner
+                    .document
+                    .get_element_by_id(id.id_str())
+                    .unwrap()
+                    .dyn_into()
+                    .unwrap();
+                return InputChange::Select {
+                    id,
+                    value: select.value(),
+                };
+            }
+
             let input: HtmlInputElement = inner
                 .document
                 .get_element_by_id(id.id_str())
@@ -171,10 +185,7 @@ impl Context {
                     id,
                     value: input.checked(),
                 },
-                InputId::Select(id) => InputChange::Select {
-                    id,
-                    value: input.value(),
-                },
+                InputId::Select(_) => unreachable!(),
             }
         })
     }
