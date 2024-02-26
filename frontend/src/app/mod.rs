@@ -43,6 +43,7 @@ pub struct AppImpl<M: AppMapTrait> {
     // background stuff
     background: Option<Background>,
     map_alpha: f64,
+    background_alpha: f64,
 }
 
 struct Selection<R> {
@@ -61,7 +62,6 @@ struct MouseSelectState<M: AppMapTrait> {
 struct Background {
     image: ImageBitmap,
     scale: f64,
-    alpha: f64,
 }
 
 impl AppImpl<Map> {
@@ -91,6 +91,7 @@ impl AppImpl<Map> {
             mouse_select_state: None,
             background: None,
             map_alpha: 0.8,
+            background_alpha: 0.8,
         };
         s.set_editing(false, context);
         s.on_map_change(context);
@@ -125,6 +126,16 @@ impl AppImpl<Map> {
                 id: CheckboxId::AutoStep,
                 value: checked,
             }) => self.auto_step = checked,
+            Event::InputChanged(InputChange::Number {
+                id: NumberInputId::BackgroundAlpha,
+                value,
+            }) => {
+                self.background_alpha = value;
+            }
+            Event::InputChanged(InputChange::Number {
+                id: NumberInputId::ForegroundAlpha,
+                value,
+            }) => self.map_alpha = value,
             _ => {}
         }
         // handle the event depending on the current mode
@@ -298,7 +309,6 @@ impl AppImpl<Map> {
                 self.background = Some(Background {
                     image: jsimage,
                     scale: 1.0,
-                    alpha: 0.8,
                 });
 
                 let map = parse_img(&image).unwrap();
@@ -425,7 +435,7 @@ impl AppImpl<Map> {
         });
     }
 
-    fn handle_event_path_find(&mut self, event: Event, context: &Context) {
+    fn handle_event_path_find(&mut self, event: Event, _context: &Context) {
         match event {
             Event::ButtonPressed(ButtonId::Reset) => {
                 if let (Some(start), Some(goal)) = (self.start, self.goal) {
@@ -496,7 +506,8 @@ impl AppImpl<Map> {
 
         // TODO: draw background image with alpha
         if let Some(background) = &self.background {
-            ctx.set_global_alpha(background.alpha);
+            ctx.set_global_alpha(self.background_alpha);
+            ctx.set_image_smoothing_enabled(false);
             ctx.draw_image_with_image_bitmap_and_dw_and_dh(
                 &background.image,
                 0.0,

@@ -154,16 +154,26 @@ impl CheckboxId {
 pub enum NumberInputId {
     Rows,
     Cols,
+    BackgroundAlpha,
+    ForegroundAlpha,
 }
 impl NumberInputId {
     pub fn id_str(&self) -> &str {
         match self {
             NumberInputId::Rows => "input-rows",
             NumberInputId::Cols => "input-cols",
+            NumberInputId::BackgroundAlpha => "input-background-alpha",
+            NumberInputId::ForegroundAlpha => "input-foreground-alpha",
         }
     }
     pub fn iterate() -> impl Iterator<Item = NumberInputId> {
-        [NumberInputId::Rows, NumberInputId::Cols].into_iter()
+        [
+            NumberInputId::Rows,
+            NumberInputId::Cols,
+            NumberInputId::BackgroundAlpha,
+            NumberInputId::ForegroundAlpha,
+        ]
+        .into_iter()
     }
 }
 
