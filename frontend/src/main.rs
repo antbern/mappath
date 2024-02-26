@@ -325,16 +325,24 @@ fn main() {
     //         },
     //     );
     // }
+    //
+
+    // initialize the app and put it in a refcell
+    let app = Rc::new(RefCell::new(None));
+
+    // spawn the constructor to setup the app
+    wasm_bindgen_futures::spawn_local({
+        let app = app.clone();
+        let context = context.clone();
+        async move {
+            *app.borrow_mut() = Some(AppImpl::new(&context).await);
+        }
+    });
 
     // create a closure that will be called by the browser's animation frame
     *redraw.borrow_mut() = Some(Closure::<dyn FnMut()>::new({
         let context = context.clone();
         let request_repaint = request_repaint.clone();
-
-        // initialize the app and put it in a refcell
-        let app: AppImpl<optimize::Map> = AppImpl::new(&context);
-        let app = Rc::new(RefCell::new(app));
-
         let rendering_context = Rc::new(rendering_context);
 
         move || {
@@ -344,13 +352,16 @@ fn main() {
             let rendering_context = rendering_context.clone();
             let app = app.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                debug!("redraw");
-                app.borrow_mut().render(&context, &rendering_context).await;
+                if let Some(app) = app.borrow_mut().as_mut() {
+                    debug!("redraw");
 
-                // if the app requested to be repainted, schedule another call
-                if context.is_repaint_requested() {
-                    debug!("repaint requested");
-                    request_repaint();
+                    app.render(&context, &rendering_context).await;
+
+                    // if the app requested to be repainted, schedule another call
+                    if context.is_repaint_requested() {
+                        debug!("repaint requested");
+                        request_repaint();
+                    }
                 }
             });
         }

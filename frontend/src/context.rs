@@ -96,6 +96,7 @@ impl Context {
     }
 
     pub fn get_storage<T: for<'de> serde::Deserialize<'de>>(&self, key: &str) -> Option<T> {
+        debug!("getting storage: key = {}", key);
         match gloo::storage::LocalStorage::get(key) {
             Ok(Some(value)) => Some(value),
             Err(e) => {
@@ -106,6 +107,7 @@ impl Context {
         }
     }
     pub fn set_storage<T: serde::Serialize>(&self, key: &str, value: &T) {
+        debug!("setting storage: key = {}", key);
         gloo::storage::LocalStorage::set(key, value).unwrap();
     }
 

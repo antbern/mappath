@@ -3,6 +3,7 @@ use crate::event::{
     ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId, SelectId,
 };
 use crate::App;
+use std::io::Cursor;
 
 use image::{DynamicImage, GenericImageView};
 use log::debug;
@@ -13,6 +14,7 @@ use web_sys::ImageData;
 use web_sys::{CanvasRenderingContext2d, ImageBitmap};
 
 const STORAGE_KEY_MAP: &str = "map";
+const STORAGE_KEY_BACKGROUND: &str = "background";
 
 pub(crate) trait AppMapTrait:
     MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>
@@ -68,8 +70,27 @@ struct Background {
     scale: f64,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct SerializableBackground {
+    image_data: Vec<u8>,
+    scale: f64,
+}
+
+impl From<&Background> for SerializableBackground {
+    fn from(b: &Background) -> Self {
+        let mut buf = Cursor::new(Vec::new());
+        b.image_data
+            .write_to(&mut buf, image::ImageOutputFormat::Png)
+            .unwrap();
+        Self {
+            image_data: buf.into_inner(),
+            scale: b.scale,
+        }
+    }
+}
+
 impl AppImpl<Map> {
-    pub fn new(context: &Context) -> Self {
+    pub async fn new(context: &Context) -> Self {
         // if the map has been stored in the browser, get it from there
         let map = if let Some(map) = context.get_storage::<Map>(STORAGE_KEY_MAP) {
             debug!("loaded map from storage");
@@ -98,6 +119,18 @@ impl AppImpl<Map> {
             background_alpha: 0.8,
             draw_grid: true,
         };
+
+        // load the background if it was stored
+        let loaded_background =
+            context.get_storage::<Option<SerializableBackground>>(STORAGE_KEY_BACKGROUND);
+        if let Some(Some(background)) = loaded_background {
+            debug!("loaded background from storage");
+            s.set_background(&background.image_data).await;
+            if let Some(b) = &mut s.background {
+                b.scale = background.scale;
+            }
+        }
+
         s.set_editing(false, context);
         s.on_map_change(context);
         s
@@ -124,6 +157,7 @@ impl AppImpl<Map> {
             Event::ButtonPressed(ButtonId::ClearStorage) => {
                 if gloo::dialogs::confirm("Are you sure you want to clear the storage?") {
                     context.remove_storage(STORAGE_KEY_MAP);
+                    context.remove_storage(STORAGE_KEY_BACKGROUND);
                 }
             }
             Event::ButtonPressed(ButtonId::ToggleEdit) => self.set_editing(!self.editing, context),
@@ -284,6 +318,12 @@ impl AppImpl<Map> {
 
             // store the map in the localstorage
             context.set_storage(STORAGE_KEY_MAP, &self.map);
+
+            // store the background in the localstorage
+            context.set_storage(
+                STORAGE_KEY_BACKGROUND,
+                &self.background.as_ref().map(SerializableBackground::from),
+            );
         }
     }
 
