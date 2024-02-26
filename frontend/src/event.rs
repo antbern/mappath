@@ -51,6 +51,7 @@ pub enum ButtonId {
     EditSave,
     SelectPoint,
     AutoScale,
+    AutoCreateMap,
 }
 
 impl ButtonId {
@@ -66,6 +67,7 @@ impl ButtonId {
             ButtonId::EditSave => "btn-edit-save",
             ButtonId::SelectPoint => "btn-select-point",
             ButtonId::AutoScale => "btn-auto-scale",
+            ButtonId::AutoCreateMap => "btn-auto-create-map",
         }
     }
 
@@ -81,6 +83,7 @@ impl ButtonId {
             ButtonId::EditSave,
             ButtonId::SelectPoint,
             ButtonId::AutoScale,
+            ButtonId::AutoCreateMap,
         ]
         .iter()
         .copied()

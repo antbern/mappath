@@ -4,6 +4,7 @@ use crate::event::{
 };
 use crate::App;
 
+use image::{DynamicImage, GenericImageView};
 use log::debug;
 use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
@@ -60,6 +61,7 @@ struct MouseSelectState<M: AppMapTrait> {
 }
 
 struct Background {
+    image_data: DynamicImage,
     image: ImageBitmap,
     scale: f64,
 }
@@ -283,18 +285,21 @@ impl AppImpl<Map> {
             Event::ButtonPressed(ButtonId::LoadPreset) => {
                 // load the image by including the bytes in the compilation
                 let image_bytes = include_bytes!("../../../data/maze-03_6_threshold.png");
-                let image = image::load_from_memory(image_bytes).expect("could not load image");
+                let dynamic_image =
+                    image::load_from_memory(image_bytes).expect("could not load image");
 
-                let rgba_image = image.to_rgba8();
+                let rgba_image = dynamic_image.to_rgba8();
 
                 let clamped_buf: Clamped<&[u8]> = Clamped(rgba_image.as_raw());
                 let image_data_temp = ImageData::new_with_u8_clamped_array_and_sh(
                     clamped_buf,
-                    image.width(),
-                    image.height(),
+                    dynamic_image.width(),
+                    dynamic_image.height(),
                 )
                 .unwrap();
 
+                // get pixel color at 0,0
+                //
                 // TODO: we have to somehow get the value out of the Promise
                 let jsimage = web_sys::window()
                     .expect("no global `window` exists")
@@ -307,12 +312,14 @@ impl AppImpl<Map> {
                     .into();
 
                 debug!("loaded background image");
+
+                let map = parse_img(&dynamic_image).unwrap();
+
                 self.background = Some(Background {
+                    image_data: dynamic_image,
                     image: jsimage,
                     scale: 1.0,
                 });
-
-                let map = parse_img(&image).unwrap();
 
                 // let mut map = create_basic_map();
                 // map.cells[3][2] = Cell::Cost(4);
@@ -434,6 +441,36 @@ impl AppImpl<Map> {
                     self.map.resize(cols as usize, rows as usize);
                     background.scale = 1.0 / ppc;
                     self.on_map_change(context);
+                }
+            }
+            Event::ButtonPressed(ButtonId::AutoCreateMap) => {
+                if self.background.is_some() {
+                    context.set_output("Click to select color that represents a valid free cell");
+                    self.mouse_select_state = Some(MouseSelectState {
+                        callback: Box::new(|app, context, event| {
+                            if let Some(background) = app.background.as_ref() {
+                                let (x, y) = app.mouse_to_world(event.x, event.y);
+                                let (x, y) =
+                                    ((x / background.scale) as u32, (y / background.scale) as u32);
+
+                                let (width, height) = background.image_data.dimensions();
+                                if x < width && y < height {
+                                    let color = background.image_data.get_pixel(x, y);
+                                    context.set_output(&format!("Selected color: {:?}", color));
+
+                                    // generate a map based on the selected color
+                                    fill_map_from_image(
+                                        &mut app.map,
+                                        &background.image_data,
+                                        background.scale,
+                                        &color,
+                                    );
+                                } else {
+                                    context.set_output("Selected color is out of bounds");
+                                }
+                            }
+                        }),
+                    });
                 }
             }
 
@@ -753,6 +790,30 @@ impl AppImpl<Map> {
                         point.row, point.col, self.map.cells[point.row][point.col], v
                     ));
                 }
+            }
+        }
+    }
+}
+
+/// Fills a map based on the pixels on an image and a selected color for valid cells
+fn fill_map_from_image(
+    map: &mut Map,
+    image: &DynamicImage,
+    image_scale: f64,
+    color: &image::Rgba<u8>,
+) {
+    for row in 0..map.rows {
+        for col in 0..map.columns {
+            // find the pixel at the center of the cell
+            let (x, y) = (col as f64 + 0.5, row as f64 + 0.5);
+            let (x, y) = (x / image_scale, y / image_scale);
+            let (x, y) = (x as u32, y as u32);
+            let pixel = image.get_pixel(x, y);
+
+            if pixel == *color {
+                map.cells[row][col] = Cell::Valid { cost: 1 };
+            } else {
+                map.cells[row][col] = Cell::Invalid;
             }
         }
     }
