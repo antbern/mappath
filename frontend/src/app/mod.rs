@@ -3,6 +3,7 @@ use crate::event::{
     ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId, SelectId,
 };
 use crate::App;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{DynamicImage, GenericImageView};
 use log::debug;
 use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
@@ -72,7 +73,7 @@ struct Background {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct SerializableBackground {
-    image_data: Vec<u8>,
+    image_data_base64: String,
     scale: f64,
 }
 
@@ -82,8 +83,9 @@ impl From<&Background> for SerializableBackground {
         b.image_data
             .write_to(&mut buf, image::ImageOutputFormat::Png)
             .unwrap();
+
         Self {
-            image_data: buf.into_inner(),
+            image_data_base64: STANDARD.encode(buf.into_inner()),
             scale: b.scale,
         }
     }
@@ -124,11 +126,12 @@ impl AppImpl<Map> {
         let loaded_background =
             context.get_storage::<Option<SerializableBackground>>(STORAGE_KEY_BACKGROUND);
         if let Some(Some(background)) = loaded_background {
-            debug!("loaded background from storage");
-            s.set_background(&background.image_data).await;
+            let data = STANDARD.decode(&background.image_data_base64).unwrap();
+            s.set_background(&data).await;
             if let Some(b) = &mut s.background {
                 b.scale = background.scale;
             }
+            debug!("loaded background from storage");
         }
 
         s.set_editing(false, context);
