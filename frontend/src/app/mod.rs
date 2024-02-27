@@ -1,3 +1,4 @@
+mod ui;
 use crate::context::Context;
 use crate::event::{
     ButtonId, CheckboxId, Event, InputChange, MouseButton, MouseEvent, NumberInputId, SelectId,
@@ -14,6 +15,8 @@ use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, ImageBitmap};
 use web_sys::{HtmlInputElement, ImageData};
 
+use self::ui::camera::Camera;
+
 const STORAGE_KEY_MAP: &str = "map";
 const STORAGE_KEY_BACKGROUND: &str = "background";
 
@@ -25,7 +28,6 @@ impl<T> AppMapTrait for T where T: MapTrait + serde::Serialize + for<'de> serde:
 
 pub struct AppImpl<M: AppMapTrait> {
     editing: bool,
-    size: f64,
     map: M,
 
     find_state: Option<FindState<M>>,
@@ -39,10 +41,10 @@ pub struct AppImpl<M: AppMapTrait> {
     selection_end: Option<M::Reference>,
 
     // for panning and dragging
-    pan_start: Option<(f64, f64)>,
-    // offset and scale in unit coordinates
-    offset: (f64, f64),
-    scale: f64,
+    last_pan_position: Option<(i32, i32)>,
+    camera: Camera,
+
+    // for doing interactive selections with the mouse
     mouse_select_state: Option<MouseSelectState<M>>,
     // background stuff
     background: Option<Background>,
@@ -104,7 +106,6 @@ impl AppImpl<Map> {
         let mut s = Self {
             editing: false,
             map,
-            size: 10.0,
             find_state: None,
             start: None,
             goal: None,
@@ -112,9 +113,8 @@ impl AppImpl<Map> {
             edit_selection: None,
             selection_start: None,
             selection_end: None,
-            pan_start: None,
-            offset: (0.0, 0.0),
-            scale: 1.0,
+            last_pan_position: None,
+            camera: Camera::new(10.0),
             mouse_select_state: None,
             background: None,
             map_alpha: 0.8,
@@ -206,17 +206,8 @@ impl AppImpl<Map> {
         }
     }
 
-    /// converts a mouse position into a world position
-    fn mouse_to_world(&self, x: i32, y: i32) -> (f64, f64) {
-        let (x, y) = (x as f64, y as f64);
-        let (x, y) = (x / self.size, y / self.size);
-        let (x, y) = (x / self.scale, y / self.scale);
-        let (x, y) = (x - self.offset.0, y - self.offset.1);
-        (x, y)
-    }
-
     fn mouse_to_world_point_valid(&self, x: i32, y: i32) -> Option<Point> {
-        let (x, y) = self.mouse_to_world(x, y);
+        let (x, y) = self.camera.pixel_to_world(x, y);
 
         if x < 0.0 || y < 0.0 {
             return None;
@@ -241,12 +232,7 @@ impl AppImpl<Map> {
                 ctrl_pressed: true,
                 ..
             }) => {
-                // convert the mouse position to unit coordinates
-                // let (x, y) = self.mouse_to_world(*x, *y);
-                let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
-
-                debug!("pan start: {:?}", (x, y));
-                self.pan_start = Some((x, y));
+                self.last_pan_position = Some((*x, *y));
                 true
             }
             Event::MouseMove(MouseEvent {
@@ -255,15 +241,11 @@ impl AppImpl<Map> {
                 ctrl_pressed: true,
                 ..
             }) => {
-                if let Some(pan_start) = self.pan_start {
-                    // let (x, y) = self.mouse_to_world(*x, *y);
-                    let (x, y) = (*x as f64 / self.size, *y as f64 / self.size);
-
-                    let (dx, dy) = (x - pan_start.0, y - pan_start.1);
-                    self.offset.0 += dx / self.scale;
-                    self.offset.1 += dy / self.scale;
-
-                    self.pan_start = Some((x, y));
+                if let Some(last_pan_position) = self.last_pan_position {
+                    let (x, y) = (*x, *y);
+                    let (dx, dy) = (x - last_pan_position.0, y - last_pan_position.1);
+                    self.camera.pan_pixels(dx, dy);
+                    self.last_pan_position = Some((x, y));
                     true
                 } else {
                     false
@@ -275,8 +257,8 @@ impl AppImpl<Map> {
                 ctrl_pressed: false,
                 ..
             }) => {
-                if self.pan_start.is_some() {
-                    self.pan_start = None;
+                if self.last_pan_position.is_some() {
+                    self.last_pan_position = None;
                     true
                 } else {
                     false
@@ -288,21 +270,13 @@ impl AppImpl<Map> {
                 delta_x: _,
                 delta_y,
             } => {
-                let (x, y) = self.mouse_to_world(*x, *y);
-                // x and y need to be the location on the canvas, not in the world
-                let (x, y) = (x + self.offset.0, y + self.offset.1);
-
-                let scale_factor = 1.05;
-                let scale_factor = if *delta_y > 0.0 {
+                let scale_factor = 1.1;
+                let scale_factor = if *delta_y < 0.0 {
                     scale_factor
                 } else {
                     1.0 / scale_factor
                 };
-
-                self.scale *= scale_factor;
-                self.offset.0 -= x * (1.0 - 1.0 / scale_factor);
-                self.offset.1 -= y * (1.0 - 1.0 / scale_factor);
-
+                self.camera.zoom_at(*x, *y, scale_factor);
                 true
             }
             _ => false,
@@ -468,7 +442,7 @@ impl AppImpl<Map> {
                     self.mouse_select_state = Some(MouseSelectState {
                         callback: Box::new(|app, context, event| {
                             if let Some(background) = app.background.as_ref() {
-                                let (x, y) = app.mouse_to_world(event.x, event.y);
+                                let (x, y) = app.camera.pixel_to_world(event.x, event.y);
                                 let (x, y) =
                                     ((x / background.scale) as u32, (y / background.scale) as u32);
 
@@ -680,14 +654,13 @@ impl AppImpl<Map> {
         let canvas = ctx.canvas().unwrap();
         ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
         ctx.save();
-        // let total_scale = self.scale * self.size;
-        // ctx.scale(total_scale, total_scale).unwrap();
-        ctx.set_line_width(1.0 / self.size);
+        ctx.set_line_width(1.0 / 10.0);
 
-        ctx.scale(self.size, self.size).unwrap();
-        ctx.translate(self.offset.0 * self.scale, self.offset.1 * self.scale)
-            .unwrap();
-        ctx.scale(self.scale, self.scale).unwrap();
+        // apply the camera transformation to the canvas transformation
+        let scale = self.camera.scale();
+        let offset = self.camera.offset();
+        ctx.scale(scale, scale).unwrap();
+        ctx.translate(offset.0, offset.1).unwrap();
 
         // TODO: draw background image with alpha
         if let Some(background) = &self.background {
