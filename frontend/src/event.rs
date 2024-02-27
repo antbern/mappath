@@ -144,6 +144,7 @@ impl SelectId {
 pub enum CheckboxId {
     AutoStep,
     DrawGrid,
+    DrawPathfindDebug,
 }
 
 impl CheckboxId {
@@ -151,10 +152,16 @@ impl CheckboxId {
         match self {
             CheckboxId::AutoStep => "input-auto-step",
             CheckboxId::DrawGrid => "input-draw-grid",
+            CheckboxId::DrawPathfindDebug => "input-draw-pathfind-debug",
         }
     }
     pub fn iterate() -> impl Iterator<Item = CheckboxId> {
-        [CheckboxId::AutoStep, CheckboxId::DrawGrid].into_iter()
+        [
+            CheckboxId::AutoStep,
+            CheckboxId::DrawGrid,
+            CheckboxId::DrawPathfindDebug,
+        ]
+        .into_iter()
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

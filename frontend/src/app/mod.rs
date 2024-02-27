@@ -52,6 +52,7 @@ pub struct AppImpl<M: AppMapTrait> {
     background_alpha: f64,
 
     draw_grid: bool,
+    draw_pathfind_debug: bool,
 }
 
 struct Selection<R> {
@@ -120,6 +121,7 @@ impl AppImpl<Map> {
             map_alpha: 0.8,
             background_alpha: 0.8,
             draw_grid: true,
+            draw_pathfind_debug: true,
         };
 
         // load the background if it was stored
@@ -172,6 +174,10 @@ impl AppImpl<Map> {
                 id: CheckboxId::DrawGrid,
                 value,
             }) => self.draw_grid = value,
+            Event::InputChanged(InputChange::Checkbox {
+                id: CheckboxId::DrawPathfindDebug,
+                value,
+            }) => self.draw_pathfind_debug = value,
             Event::InputChanged(InputChange::Number {
                 id: NumberInputId::BackgroundAlpha,
                 value,
@@ -813,21 +819,23 @@ impl AppImpl<Map> {
         if let Some(state) = &self.find_state {
             let visited = state.pathfinder.get_visited();
 
-            let margin = 0.15;
-            for row in 0..self.map.rows {
-                for col in 0..self.map.columns {
-                    let p = Point { row, col };
-                    let v = visited.get(p);
+            if self.draw_pathfind_debug {
+                let margin = 0.15;
+                for row in 0..self.map.rows {
+                    for col in 0..self.map.columns {
+                        let p = Point { row, col };
+                        let v = visited.get(p);
 
-                    if let Some(f) = *v {
-                        let color = format!("rgba({}, 0.0, 0.0, 0.8)", f.cost);
-                        ctx.set_fill_style(&color.into());
-                        ctx.fill_rect(
-                            col as f64 + margin,
-                            row as f64 + margin,
-                            1.0 - 2.0 * margin,
-                            1.0 - 2.0 * margin,
-                        );
+                        if let Some(f) = *v {
+                            let color = format!("rgba({}, 0.0, 0.0, 0.8)", f.cost);
+                            ctx.set_fill_style(&color.into());
+                            ctx.fill_rect(
+                                col as f64 + margin,
+                                row as f64 + margin,
+                                1.0 - 2.0 * margin,
+                                1.0 - 2.0 * margin,
+                            );
+                        }
                     }
                 }
             }
@@ -838,7 +846,10 @@ impl AppImpl<Map> {
                     context.set_output("No path found");
                 }
                 PathFinderState::PathFound(pr) => {
-                    ctx.set_stroke_style(&"#00FF00".into());
+                    ctx.set_stroke_style(&"#FF0000".into());
+
+                    // the width is set relative to the size of one cell
+                    ctx.set_line_width(1.0 / 3.0);
                     ctx.begin_path();
                     ctx.move_to(pr.start.col as f64 + 0.5, pr.start.row as f64 + 0.5);
                     for p in &pr.path {
