@@ -1,5 +1,5 @@
 .content {
-    max-width: 960px;
+    max-width: 100%;
     margin: auto;
   }
 
@@ -7,20 +7,25 @@
     display: flex;
 }
 
-.column-left {
-    flex: 70%;
+.column-canvas {
+    flex: 60%;
+	padding: 5px;
 }
 
-.column-right {
-	flex: 30%;
+.column-controls {
+	flex: 20%;
+}
+.column-output {
+	flex: 20%;
 }
 
 #canvas {
-	height: 600px;
+	height: 700px;
 	width: 100%;
 	border: 1px solid #000;
 	object-fit: contain;
 }
+
 /* enable word wrap on all pre tags */
 pre {
     white-space: pre-wrap;

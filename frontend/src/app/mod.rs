@@ -662,7 +662,6 @@ impl AppImpl<Map> {
         ctx.scale(scale, scale).unwrap();
         ctx.translate(offset.0, offset.1).unwrap();
 
-        // TODO: draw background image with alpha
         if let Some(background) = &self.background {
             ctx.set_global_alpha(self.background_alpha);
             ctx.set_image_smoothing_enabled(false);

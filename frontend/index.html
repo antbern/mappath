@@ -10,10 +10,7 @@
 <body>
 	<div class="content">
 		<div class="row">
-			<div class="column-left">
-				<canvas id="canvas" oncontextmenu="return false;"></canvas>
-			</div>
-			<div class="column-right">
+			<div class="column-controls">
 
 				<button id="btn-clear-storage">Clear Stored Map</button>
 				<button id="btn-mode-edit">Toggle [E]dit</button>
@@ -99,16 +96,22 @@
 				<!-- <input type="radio" id="select-mode-radio-find" name="select-mode-radio" value="find"> -->
 				<!-- <label for="select-mode-radio-find">2. Find Paths</label> -->
 				<br />
+				<div>
+					<p>Click and drag while holding Ctrl to pan.</p>
+					<p>In path finding mode: Click to select start, Shift-Click to select goal.</p>
+				</div>
+
+				<div>
+					<!-- add a footer with the commit hash  -->
+					<p>Version <a href="" id="github-link"> <code id="commit-hash">local</code></a></p>
+				</div>
+			</div>
+			<div class="column-canvas">
+				<canvas id="canvas" oncontextmenu="return false;"></canvas>
+			</div>
+			<div class="column-output">
 				<pre id="output"></pre>
 			</div>
-		</div>
-		<div>
-			<p>Click and drag while holding Ctrl to pan.</p>
-			<p>In path finding mode: Click to select start, Shift-Click to select goal.</p>
-		</div>
-		<!-- add a footer with the commit hash  -->
-		<div>
-			<p>Version <a href="" id="github-link"> <code id="commit-hash">local</code></a></p>
 		</div>
 	</div>
 
