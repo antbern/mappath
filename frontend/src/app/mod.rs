@@ -7,7 +7,7 @@ use crate::App;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{DynamicImage, GenericImageView};
 use log::debug;
-use optimize::{parse_img, Cell, Map, MapTrait, PathFinder, Point, Visited};
+use optimize::{parse_img, Cell, GridMap, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
 use std::io::Cursor;
 use wasm_bindgen::Clamped;
@@ -94,14 +94,14 @@ impl From<&Background> for SerializableBackground {
     }
 }
 
-impl AppImpl<Map<usize>> {
+impl AppImpl<GridMap<usize>> {
     pub async fn new(context: &Context) -> Self {
         // if the map has been stored in the browser, get it from there
-        let map = if let Some(map) = context.get_storage::<Map<usize>>(STORAGE_KEY_MAP) {
+        let map = if let Some(map) = context.get_storage::<GridMap<usize>>(STORAGE_KEY_MAP) {
             debug!("loaded map from storage");
             map
         } else {
-            Map::new(10, 10, 1)
+            GridMap::new(10, 10, 1)
         };
 
         let mut s = Self {
@@ -142,7 +142,7 @@ impl AppImpl<Map<usize>> {
     }
 }
 
-impl App for AppImpl<Map<usize>> {
+impl App for AppImpl<GridMap<usize>> {
     async fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
@@ -155,7 +155,7 @@ impl App for AppImpl<Map<usize>> {
         self.render_app(context, ctx);
     }
 }
-impl AppImpl<Map<usize>> {
+impl AppImpl<GridMap<usize>> {
     async fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
@@ -882,7 +882,7 @@ impl AppImpl<Map<usize>> {
 
 /// Fills a map based on the pixels on an image and a selected color for valid cells
 fn fill_map_from_image(
-    map: &mut Map<usize>,
+    map: &mut GridMap<usize>,
     image: &DynamicImage,
     image_scale: f64,
     color: &image::Rgba<u8>,

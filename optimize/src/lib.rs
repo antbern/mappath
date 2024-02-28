@@ -126,13 +126,13 @@ pub trait MapStorage<T> {
 
 /// A MapTrait implementation that uses a rectangular grid of cells
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Map<C: Cost> {
+pub struct GridMap<C: Cost> {
     pub rows: usize,
     pub columns: usize,
     pub cells: Vec<Vec<Cell<C>>>,
 }
 
-impl<C: Cost> Map<C> {
+impl<C: Cost> GridMap<C> {
     pub fn new(rows: usize, columns: usize, default_cost: C) -> Self {
         Self {
             rows,
@@ -206,7 +206,7 @@ pub struct Point {
 
 impl NodeReference for Point {}
 
-impl<C: Cost + Display> Display for Map<C> {
+impl<C: Cost + Display> Display for GridMap<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.cells {
             for cell in row {
@@ -219,7 +219,7 @@ impl<C: Cost + Display> Display for Map<C> {
     }
 }
 
-impl<C: Cost> MapTrait for Map<C> {
+impl<C: Cost> MapTrait for GridMap<C> {
     type Reference = Point;
     type Storage<T: Default + Copy + Clone + 'static> = CellStorage<T>;
     type Cost = C;
@@ -543,7 +543,7 @@ impl<
     }
 }
 
-pub fn parse_img(img: &DynamicImage) -> Result<Map<usize>, anyhow::Error> {
+pub fn parse_img(img: &DynamicImage) -> Result<GridMap<usize>, anyhow::Error> {
     let width = img.width() as usize;
     let height = img.height() as usize;
 
@@ -561,7 +561,7 @@ pub fn parse_img(img: &DynamicImage) -> Result<Map<usize>, anyhow::Error> {
         }
     }
 
-    Ok(Map {
+    Ok(GridMap {
         rows: height,
         columns: width,
         cells,
@@ -573,9 +573,9 @@ mod test {
 
     use super::*;
 
-    fn create_basic_map() -> Map<usize> {
+    fn create_basic_map() -> GridMap<usize> {
         use Cell::*;
-        Map {
+        GridMap {
             rows: 7,
             columns: 7,
             cells: vec![
