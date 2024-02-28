@@ -31,4 +31,28 @@ pre {
     white-space: pre-wrap;
 }
 
+input[type="number"] {
+	width: 5em;
+	padding: 6px 10px;
+	margin: 8px 4px;
+	box-sizing: border-box;
+	border: 2px solid #ccc;
+	border-radius: 4px;
+}
 
+label {
+	padding: 12px 12px 12px 0;
+	display: inline-block;
+}
+
+button {
+	padding: 4px 8px;
+	margin: 8px 0;
+}
+
+fieldset {
+	margin: 8px 0;
+}
+fieldset[disabled] {
+	opacity: 0.5;
+}

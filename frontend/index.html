@@ -17,56 +17,66 @@
 
 				<fieldset id="edit-inputs">
 					<legend>Edit</legend>
-					<button id="btn-load-preset">Load Preset</button>
-					<br /><br />
-					Rows: <input type="number" id="input-rows"> <br>
-					Columns: <input type="number" id="input-cols"><br>
 
-					<br />
-					Cell:<br />
-					<input type="radio" name="cell" value="invalid" id="cell-invalid">
-					<label for="cell-invalid">: Invalid</label><br />
+					<details>
+						<summary>Presets</summary>
+						<button id="btn-load-preset">Load Preset</button>
+					</details>
+					<hr />
+					<details>
+						<summary>Step 1: Choose background</summary>
 
-					<input type="radio" name="cell" value="normal" id="cell-normal">
-					<label for="cell-normal">: Normal</label>
-					<input type="number" id="input-normal-cost" value="1">
-					<br />
+						<select id="input-select-background">
+							<option value="file">Choose File...</option>
+							<option value="maze">Maze</option>
+							<option value="maze_map">Maze Map</option>
+						</select>
+						<button id="btn-load-background">Load</button>
+						<input type="file" id="input-file" accept="image/png, image/jpeg">
+					</details>
 
-					<input type="radio" name="cell" value="oneway" id="cell-oneway">
-					<label for="cell-oneway">: One-Way</label>
-					<select id="select-oneway">
+					<hr />
+					<details>
+						<summary>Step 2: Decide Grid Size</summary>
+						<input type="number" id="input-background-scale" value="1">
+						<label for="input-background-scale">Scale</label><br>
+						<!-- add some buttons for the auto features  -->
 
-						<option value="up">Up</option>
-						<option value="down">Down</option>
-						<option value="left">Left</option>
-						<option value="right">Right</option>
-					</select>
-					<br />
-					<button id="btn-edit-save">[S]ave</button>
-					<br /> <br />
+						<input type="number" id="input-auto-scale-factor" value="1">
+						<label for="input-auto-scale-factor">Pixels Per Cell</label>
+						<button id="btn-auto-scale">Auto Scale</button><br>
+
+						<input type="number" id="input-rows"><label for="input-rows">Rows</label> <br>
+						<input type="number" id="input-cols"><label for="input-cols">Columns</label><br>
+					</details>
+
+					<hr />
+					<details open>
+						<summary>Step 3: Edit Cells</summary>
+						<input type="radio" name="cell" value="invalid" id="cell-invalid">
+						<label for="cell-invalid">: Invalid</label><br />
+
+						<input type="radio" name="cell" value="normal" id="cell-normal">
+						<label for="cell-normal">: Normal</label>
+						<input type="number" id="input-normal-cost" value="1">
+						<br />
+
+						<input type="radio" name="cell" value="oneway" id="cell-oneway">
+						<label for="cell-oneway">: One-Way</label>
+						<select id="select-oneway">
+							<option value="up">Up</option>
+							<option value="down">Down</option>
+							<option value="left">Left</option>
+							<option value="right">Right</option>
+						</select>
+						<button id="btn-auto-create-map">Auto Fill Map</button>
+						<br />
+						<button id="btn-edit-save">[S]ave</button>
+					</details>
+
 					<button id="btn-select-point">Select [P]oint</button>
 
-					<br /> <br />
-					Background<br />
-					<select id="input-select-background">
-						<option value="file">Choose File...</option>
-						<option value="maze">Maze</option>
-						<option value="maze_map">Maze Map</option>
-					</select>
-					<button id="btn-load-background">Load</button>
-					<input type="file" id="input-file" accept="image/png, image/jpeg">
-					<br />
 
-					<input type="number" id="input-background-scale" value="1">
-					<label for="input-background-scale">Scale</label><br>
-					<!-- add some buttons for the auto features  -->
-
-					<input type="number" id="input-auto-scale-factor" value="1">
-					<label for="input-auto-scale-factor">Pixels Per Cell</label>
-					<button id="btn-auto-scale">Auto Scale</button>
-					<br />
-
-					<button id="btn-auto-create-map">Auto Fill Map</button>
 
 				</fieldset>
 
