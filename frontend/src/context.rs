@@ -146,12 +146,12 @@ impl Context {
         })
     }
 
-    pub fn set_active_cell(&self, cell: Cell) {
+    pub fn set_active_cell(&self, cell: Cell<usize>) {
         self.write(|inner| {
             inner.cell_selector.set_cell(cell);
         });
     }
-    pub fn get_active_cell(&self) -> Option<Cell> {
+    pub fn get_active_cell(&self) -> Option<Cell<usize>> {
         self.read(|inner| inner.cell_selector.get_cell())
     }
 
@@ -219,7 +219,7 @@ pub struct CellSelector {
 }
 
 impl CellSelector {
-    pub fn set_cell(&self, cell: Cell) {
+    pub fn set_cell(&self, cell: Cell<usize>) {
         debug!("setting cell: {:?}", cell);
 
         match cell {
@@ -236,7 +236,7 @@ impl CellSelector {
         }
     }
 
-    pub fn get_cell(&self) -> Option<Cell> {
+    pub fn get_cell(&self) -> Option<Cell<usize>> {
         if self.radio_invalid.checked() {
             Some(Cell::Invalid)
         } else if self.radio_valid.checked() {

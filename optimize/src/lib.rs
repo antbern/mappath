@@ -5,21 +5,28 @@ use std::{
     cmp::Ordering,
     collections::BinaryHeap,
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut},
+    ops::{Add, Deref, DerefMut},
     str::FromStr,
 };
 
 use image::{DynamicImage, GenericImageView};
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Cell {
-    Invalid,
-    Valid { cost: usize },
-    OneWay { cost: usize, direction: Direction },
+pub trait Cost:
+    Copy + Clone + Default + PartialEq + Eq + PartialOrd + Ord + Add<Output = Self> + 'static
+{
 }
 
-impl Default for Cell {
+impl Cost for usize {}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Cell<C: Cost> {
+    Invalid,
+    Valid { cost: C },
+    OneWay { cost: C, direction: Direction },
+}
+
+impl<C: Cost> Default for Cell<C> {
     fn default() -> Self {
         Self::Invalid
     }
@@ -62,15 +69,14 @@ impl FromStr for Direction {
     }
 }
 
-impl Display for Cell {
+impl<C: Cost + Display> Display for Cell<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
                 Cell::Invalid => "X",
-                Cell::Valid { cost } if *cost == 1 => " ",
-                Cell::Valid { .. } => "$",
+                Cell::Valid { .. } => " ",
                 Cell::OneWay { direction, .. } => match direction {
                     Direction::Up => "🠭",
                     Direction::Down => "🠯",
@@ -93,12 +99,16 @@ pub trait MapTrait {
     /// The type that the map uses for storage
     type Storage<T: Default + Copy + Clone + 'static>: MapStorage<T, Reference = Self::Reference>;
 
+    type Cost: Cost;
+
     /// Check if the provided node reference is valid
     fn is_valid(&self, node: Self::Reference) -> bool;
 
     /// Return an iterator over the neighbors of the provided node and the cost required to go there
-    fn neighbors_of(&self, node: Self::Reference)
-        -> impl Iterator<Item = (Self::Reference, usize)>;
+    fn neighbors_of(
+        &self,
+        node: Self::Reference,
+    ) -> impl Iterator<Item = (Self::Reference, Self::Cost)>;
 
     /// Create a storage for values of type T
     fn create_storage<T: Default + Copy + Clone + 'static>(&self) -> Self::Storage<T>;
@@ -116,18 +126,18 @@ pub trait MapStorage<T> {
 
 /// A MapTrait implementation that uses a rectangular grid of cells
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Map {
+pub struct Map<C: Cost> {
     pub rows: usize,
     pub columns: usize,
-    pub cells: Vec<Vec<Cell>>,
+    pub cells: Vec<Vec<Cell<C>>>,
 }
 
-impl Map {
-    pub fn new(rows: usize, columns: usize) -> Self {
+impl<C: Cost> Map<C> {
+    pub fn new(rows: usize, columns: usize, default_cost: C) -> Self {
         Self {
             rows,
             columns,
-            cells: vec![vec![Cell::Valid { cost: 1 }; columns]; rows],
+            cells: vec![vec![Cell::Valid { cost: default_cost }; columns]; rows],
         }
     }
 
@@ -196,7 +206,7 @@ pub struct Point {
 
 impl NodeReference for Point {}
 
-impl Display for Map {
+impl<C: Cost + Display> Display for Map<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.cells {
             for cell in row {
@@ -209,9 +219,10 @@ impl Display for Map {
     }
 }
 
-impl MapTrait for Map {
+impl<C: Cost> MapTrait for Map<C> {
     type Reference = Point;
     type Storage<T: Default + Copy + Clone + 'static> = CellStorage<T>;
+    type Cost = C;
 
     fn is_valid(&self, node: Self::Reference) -> bool {
         node.row < self.rows && node.col < self.columns
@@ -220,7 +231,7 @@ impl MapTrait for Map {
     fn neighbors_of(
         &self,
         node: Self::Reference,
-    ) -> impl Iterator<Item = (Self::Reference, usize)> {
+    ) -> impl Iterator<Item = (Self::Reference, Self::Cost)> {
         let mut points = Vec::with_capacity(4);
 
         let c = self.cells[node.row][node.col];
@@ -319,57 +330,57 @@ impl MapTrait for Map {
 }
 
 #[derive(Eq, Debug)]
-struct ToVisit<R: Eq> {
-    cost: usize,
+struct ToVisit<C, R: Eq> {
+    cost: C,
     point: R,
     from: Option<R>,
 }
 
-impl<R: Eq> Ord for ToVisit<R> {
+impl<C: Ord, R: Eq> Ord for ToVisit<C, R> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.cost.cmp(&other.cost).reverse() // reverse for BinaryHeap to be a min-heap
     }
 }
 
-impl<R: Eq> PartialOrd for ToVisit<R> {
-    fn partial_cmp(&self, other: &ToVisit<R>) -> Option<Ordering> {
+impl<C: Ord, R: Eq> PartialOrd for ToVisit<C, R> {
+    fn partial_cmp(&self, other: &ToVisit<C, R>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<R: Eq> PartialEq for ToVisit<R> {
-    fn eq(&self, other: &ToVisit<R>) -> bool {
+impl<C: Eq, R: Eq> PartialEq for ToVisit<C, R> {
+    fn eq(&self, other: &ToVisit<C, R>) -> bool {
         self.cost == other.cost
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct VisitedItem<R> {
-    pub cost: usize,
+pub struct VisitedItem<C, R> {
+    pub cost: C,
     pub from: Option<R>,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Visited<R>(Option<VisitedItem<R>>);
+pub struct Visited<C, R>(Option<VisitedItem<C, R>>);
 
-impl<R> Default for Visited<R> {
+impl<C, R> Default for Visited<C, R> {
     fn default() -> Self {
         Visited(None)
     }
 }
-impl<R> Deref for Visited<R> {
-    type Target = Option<VisitedItem<R>>;
+impl<C, R> Deref for Visited<C, R> {
+    type Target = Option<VisitedItem<C, R>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<R> DerefMut for Visited<R> {
+impl<C, R> DerefMut for Visited<C, R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
-impl<R> Display for Visited<R> {
+impl<C: Display, R> Display for Visited<C, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             Some(item) => write!(f, "{:03} ", item.cost),
@@ -379,39 +390,41 @@ impl<R> Display for Visited<R> {
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
-pub struct PathResult<R> {
+pub struct PathResult<C, R> {
     pub path: Vec<R>,
     pub start: R,
     pub goal: R,
-    pub total_cost: usize,
+    pub total_cost: C,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PathFinderState<R> {
+pub enum PathFinderState<C, R> {
     Computing,
     NoPathFound,
-    PathFound(PathResult<R>),
+    PathFound(PathResult<C, R>),
 }
 
 #[derive(Debug)]
 pub struct PathFinder<
     R: NodeReference,
-    S: MapStorage<Visited<R>, Reference = R>,
-    M: MapTrait<Reference = R, Storage<Visited<R>> = S>,
+    C: Cost,
+    S: MapStorage<Visited<C, R>, Reference = R>,
+    M: MapTrait<Reference = R, Storage<Visited<C, R>> = S, Cost = C>,
 > {
     start: R,
     goal: R,
     visited: S,
-    visit_list: BinaryHeap<ToVisit<R>>,
-    state: PathFinderState<R>,
+    visit_list: BinaryHeap<ToVisit<C, R>>,
+    state: PathFinderState<C, R>,
     _map: std::marker::PhantomData<M>,
 }
 
 impl<
         R: NodeReference,
-        S: MapStorage<Visited<R>, Reference = R>,
-        M: MapTrait<Reference = R, Storage<Visited<R>> = S>,
-    > PathFinder<R, S, M>
+        C: Cost + Display,
+        S: MapStorage<Visited<C, R>, Reference = R>,
+        M: MapTrait<Reference = R, Storage<Visited<C, R>> = S, Cost = C>,
+    > PathFinder<R, C, S, M>
 {
     pub fn new(start: R, goal: R, visited: S) -> Self {
         Self {
@@ -419,7 +432,7 @@ impl<
             goal,
             visited,
             visit_list: BinaryHeap::from([ToVisit {
-                cost: 0,
+                cost: Default::default(),
                 point: start,
                 from: None,
             }]),
@@ -428,7 +441,7 @@ impl<
         }
     }
 
-    pub fn finish(mut self, map: &M) -> (PathFinderState<R>, S) {
+    pub fn finish(mut self, map: &M) -> (PathFinderState<C, R>, S) {
         loop {
             match self.step(map) {
                 PathFinderState::Computing => {}
@@ -437,7 +450,7 @@ impl<
         }
     }
 
-    pub fn step(&mut self, map: &M) -> PathFinderState<R> {
+    pub fn step(&mut self, map: &M) -> PathFinderState<C, R> {
         if self.state != PathFinderState::Computing {
             return self.state.clone();
         }
@@ -513,7 +526,7 @@ impl<
         return self.state.clone();
     }
 
-    pub fn state(&self) -> &PathFinderState<R> {
+    pub fn state(&self) -> &PathFinderState<C, R> {
         &self.state
     }
 
@@ -530,7 +543,7 @@ impl<
     }
 }
 
-pub fn parse_img(img: &DynamicImage) -> Result<Map, anyhow::Error> {
+pub fn parse_img(img: &DynamicImage) -> Result<Map<usize>, anyhow::Error> {
     let width = img.width() as usize;
     let height = img.height() as usize;
 
@@ -560,7 +573,7 @@ mod test {
 
     use super::*;
 
-    fn create_basic_map() -> Map {
+    fn create_basic_map() -> Map<usize> {
         use Cell::*;
         Map {
             rows: 7,

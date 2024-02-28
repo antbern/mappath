@@ -61,7 +61,7 @@ struct Selection<R> {
 }
 
 struct FindState<M: AppMapTrait> {
-    pathfinder: PathFinder<M::Reference, M::Storage<Visited<M::Reference>>, M>,
+    pathfinder: PathFinder<M::Reference, M::Cost, M::Storage<Visited<M::Cost, M::Reference>>, M>,
 }
 
 struct MouseSelectState<M: AppMapTrait> {
@@ -94,14 +94,14 @@ impl From<&Background> for SerializableBackground {
     }
 }
 
-impl AppImpl<Map> {
+impl AppImpl<Map<usize>> {
     pub async fn new(context: &Context) -> Self {
         // if the map has been stored in the browser, get it from there
-        let map = if let Some(map) = context.get_storage::<Map>(STORAGE_KEY_MAP) {
+        let map = if let Some(map) = context.get_storage::<Map<usize>>(STORAGE_KEY_MAP) {
             debug!("loaded map from storage");
             map
         } else {
-            Map::new(10, 10)
+            Map::new(10, 10, 1)
         };
 
         let mut s = Self {
@@ -142,7 +142,7 @@ impl AppImpl<Map> {
     }
 }
 
-impl App for AppImpl<Map> {
+impl App for AppImpl<Map<usize>> {
     async fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
@@ -155,7 +155,7 @@ impl App for AppImpl<Map> {
         self.render_app(context, ctx);
     }
 }
-impl AppImpl<Map> {
+impl AppImpl<Map<usize>> {
     async fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
@@ -325,7 +325,7 @@ impl AppImpl<Map> {
                     let goal = Point { row: 44, col: 51 };
 
                     let finder =
-                        PathFinder::new(start, goal, map.create_storage::<Visited<Point>>());
+                        PathFinder::new(start, goal, map.create_storage::<Visited<usize, Point>>());
 
                     self.map = map;
                     self.goal = Some(goal);
@@ -594,7 +594,7 @@ impl AppImpl<Map> {
                 pathfinder: PathFinder::new(
                     start,
                     goal,
-                    self.map.create_storage::<Visited<Point>>(),
+                    self.map.create_storage::<Visited<usize, Point>>(),
                 ),
             });
         }
@@ -608,7 +608,7 @@ impl AppImpl<Map> {
                         pathfinder: PathFinder::new(
                             start,
                             goal,
-                            self.map.create_storage::<Visited<Point>>(),
+                            self.map.create_storage::<Visited<usize, Point>>(),
                         ),
                     });
                 }
@@ -646,7 +646,7 @@ impl AppImpl<Map> {
                             pathfinder: PathFinder::new(
                                 start,
                                 goal,
-                                self.map.create_storage::<Visited<Point>>(),
+                                self.map.create_storage::<Visited<usize, Point>>(),
                             ),
                         });
                     }
@@ -882,7 +882,7 @@ impl AppImpl<Map> {
 
 /// Fills a map based on the pixels on an image and a selected color for valid cells
 fn fill_map_from_image(
-    map: &mut Map,
+    map: &mut Map<usize>,
     image: &DynamicImage,
     image_scale: f64,
     color: &image::Rgba<u8>,
