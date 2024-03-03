@@ -15,3 +15,10 @@ path = "bin/main.rs"
 anyhow = "1.0.77"
 image = "0.24.7"
 serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "gridmap"
+harness = false

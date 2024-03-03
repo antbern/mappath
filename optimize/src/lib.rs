@@ -518,8 +518,6 @@ impl<
 
             // if this is the goal, we are done! (and should probably do some back-tracking to find the actual shortest path...)
             if visit.point == self.goal {
-                println!("FOUND GOAL!: cost={}", visit.cost);
-
                 // backtrack to find the total shortest path
                 let mut path: Vec<R> = Vec::new();
                 path.push(self.goal);
