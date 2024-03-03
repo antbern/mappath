@@ -146,6 +146,7 @@ fn main() {
             input_valid_cost: get_element_by_id("input-normal-cost"),
             radio_oneway: get_element_by_id("cell-oneway"),
             select_oneway: get_element_by_id("select-oneway"),
+            span_oneway_target: get_element_by_id("span-oneway-target"),
         },
         output,
         input: Input::default(),

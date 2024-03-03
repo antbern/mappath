@@ -53,6 +53,7 @@ pub enum ButtonId {
     AutoScale,
     AutoCreateMap,
     LoadBackground,
+    SetOnewayTarget,
 }
 
 impl ButtonId {
@@ -70,6 +71,7 @@ impl ButtonId {
             ButtonId::AutoScale => "btn-auto-scale",
             ButtonId::AutoCreateMap => "btn-auto-create-map",
             ButtonId::LoadBackground => "btn-load-background",
+            ButtonId::SetOnewayTarget => "btn-oneway-target-set",
         }
     }
 
@@ -87,6 +89,7 @@ impl ButtonId {
             ButtonId::AutoScale,
             ButtonId::AutoCreateMap,
             ButtonId::LoadBackground,
+            ButtonId::SetOnewayTarget,
         ]
         .iter()
         .copied()

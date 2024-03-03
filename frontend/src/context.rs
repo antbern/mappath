@@ -1,12 +1,14 @@
 use gloo::storage::Storage;
 use log::debug;
 use optimize::Cell;
+use optimize::Point;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;
 use wasm_bindgen::JsCast;
 use web_sys::Document;
 use web_sys::HtmlDivElement;
+use web_sys::HtmlElement;
 use web_sys::HtmlInputElement;
 use web_sys::HtmlPreElement;
 use web_sys::HtmlSelectElement;
@@ -216,6 +218,7 @@ pub struct CellSelector {
     pub input_valid_cost: HtmlInputElement,
     pub radio_oneway: HtmlInputElement,
     pub select_oneway: HtmlSelectElement,
+    pub span_oneway_target: HtmlElement,
 }
 
 impl CellSelector {
@@ -236,7 +239,15 @@ impl CellSelector {
                 self.radio_oneway.set_checked(true);
                 self.input_valid_cost.set_value(&cost.to_string());
                 self.select_oneway.set_value(&direction.to_string());
-                    // TODO: UI for setting target
+
+                let target_string = if let Some(target) = target {
+                    serde_json::to_string(&target).unwrap()
+                } else {
+                    "".to_string()
+                };
+
+                self.span_oneway_target
+                    .set_inner_text(target_string.as_str());
             }
         }
     }
@@ -250,7 +261,26 @@ impl CellSelector {
         } else if self.radio_oneway.checked() {
             let cost = self.input_valid_cost.value().parse().unwrap();
             let direction = self.select_oneway.value().parse().unwrap();
-            Some(Cell::OneWay { cost, direction, target: None })
+
+            // try to deserialize the target
+            let target = self.span_oneway_target.inner_text();
+            let target: Option<Point> = if !target.is_empty() {
+                match serde_json::from_str(&target) {
+                    Ok(point) => Some(point),
+                    Err(e) => {
+                        gloo::dialogs::alert(&format!("Could not parse target point: {e}"));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            Some(Cell::OneWay {
+                cost,
+                direction,
+                target,
+            })
         } else {
             None
         }

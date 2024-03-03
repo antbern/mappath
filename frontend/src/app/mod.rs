@@ -351,6 +351,27 @@ impl AppImpl<GridMap<usize>> {
                     }),
                 });
             }
+            Event::ButtonPressed(ButtonId::SetOnewayTarget) => {
+                self.mouse_select_state = Some(MouseSelectState {
+                    callback: Box::new(|app, context, event| {
+                        // if the user selected a alid cell, replace the target of the currently active cell
+                        // but only if it is a one way cell
+                        if let Some(point) = app.mouse_to_world_point_valid(event.x, event.y) {
+                            let cell = context.get_active_cell();
+                            if let Some(Cell::OneWay {
+                                direction, cost, ..
+                            }) = cell
+                            {
+                                context.set_active_cell(Cell::OneWay {
+                                    target: Some(point),
+                                    direction,
+                                    cost,
+                                });
+                            }
+                        }
+                    }),
+                });
+            }
             Event::MousePressed(MouseEvent {
                 x,
                 y,
