@@ -54,6 +54,7 @@ pub enum ButtonId {
     AutoCreateMap,
     LoadBackground,
     SetOnewayTarget,
+    DoubleMap,
 }
 
 impl ButtonId {
@@ -72,6 +73,7 @@ impl ButtonId {
             ButtonId::AutoCreateMap => "btn-auto-create-map",
             ButtonId::LoadBackground => "btn-load-background",
             ButtonId::SetOnewayTarget => "btn-oneway-target-set",
+            ButtonId::DoubleMap => "btn-double-map",
         }
     }
 
@@ -90,6 +92,7 @@ impl ButtonId {
             ButtonId::AutoCreateMap,
             ButtonId::LoadBackground,
             ButtonId::SetOnewayTarget,
+            ButtonId::DoubleMap,
         ]
         .iter()
         .copied()

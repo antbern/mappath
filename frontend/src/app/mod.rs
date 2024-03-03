@@ -342,6 +342,24 @@ impl AppImpl<GridMap<usize>> {
                     self.on_map_change(context);
                 }
             }
+            Event::ButtonPressed(ButtonId::DoubleMap) => {
+                if let Some(goal) = &mut self.goal {
+                    goal.row *= 2;
+                    goal.col *= 2;
+                }
+
+                if let Some(start) = &mut self.start {
+                    start.row *= 2;
+                    start.col *= 2;
+                }
+
+                if let Some(background) = &mut self.background {
+                    background.scale *= 2.0;
+                }
+
+                self.map.scale_up(2);
+                self.on_map_change(context);
+            }
             Event::ButtonPressed(ButtonId::SelectPoint) => {
                 self.mouse_select_state = Some(MouseSelectState {
                     callback: Box::new(|app, context, event| {

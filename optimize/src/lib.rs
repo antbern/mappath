@@ -180,6 +180,25 @@ impl<C: Cost> GridMap<C> {
         self.columns = columns;
         self.cells = new_cells;
     }
+    /// Scales the map by the given factor, i.e. to make it twice as large, pass 2.
+    /// Interpolates the cells by repeating the existing cells in the new grid.
+    pub fn scale_up(&mut self, factor: usize) {
+        let mut new_cells = vec![vec![Cell::default(); self.columns * factor]; self.rows * factor];
+
+        for row in 0..self.rows {
+            for col in 0..self.columns {
+                for r in 0..factor {
+                    for c in 0..factor {
+                        new_cells[row * factor + r][col * factor + c] = self.cells[row][col];
+                    }
+                }
+            }
+        }
+
+        self.rows *= factor;
+        self.columns *= factor;
+        self.cells = new_cells;
+    }
 }
 
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
