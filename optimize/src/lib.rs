@@ -22,8 +22,16 @@ impl Cost for usize {}
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Cell<C: Cost> {
     Invalid,
-    Valid { cost: C },
-    OneWay { cost: C, direction: Direction },
+    Valid {
+        cost: C,
+    },
+    OneWay {
+        cost: C,
+        // the direction which one can move from this cell
+        direction: Direction,
+        // optional target point to use as "teleport" when moving in the direction
+        target: Option<Point>,
+    },
 }
 
 impl<C: Cost> Default for Cell<C> {
@@ -77,11 +85,25 @@ impl<C: Cost + Display> Display for Cell<C> {
             match self {
                 Cell::Invalid => "X",
                 Cell::Valid { .. } => " ",
-                Cell::OneWay { direction, .. } => match direction {
+                Cell::OneWay {
+                    direction,
+                    target: None,
+                    ..
+                } => match direction {
                     Direction::Up => "🠭",
                     Direction::Down => "🠯",
                     Direction::Left => "🠬",
                     Direction::Right => "🠮",
+                },
+                Cell::OneWay {
+                    direction,
+                    target: Some(_),
+                    ..
+                } => match direction {
+                    Direction::Up => "↟",
+                    Direction::Down => "↡",
+                    Direction::Left => "↞",
+                    Direction::Right => "↠",
                 },
             }
         )
@@ -198,7 +220,7 @@ impl<T: Display> Display for CellStorage<T> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     pub row: usize,
     pub col: usize,
@@ -276,7 +298,11 @@ impl<C: Cost> MapTrait for GridMap<C> {
                     ));
                 }
             }
-            Cell::OneWay { cost, direction } => {
+            Cell::OneWay {
+                cost,
+                direction,
+                target,
+            } => {
                 if node.row > 0 && direction != Direction::Down {
                     points.push((
                         Point {
@@ -313,6 +339,10 @@ impl<C: Cost> MapTrait for GridMap<C> {
                         },
                         cost,
                     ));
+                }
+
+                if let Some(target) = target {
+                    points.push((target, cost));
                 }
             }
             Cell::Invalid => {}

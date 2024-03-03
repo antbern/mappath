@@ -319,10 +319,16 @@ impl AppImpl<GridMap<usize>> {
                     .await;
 
                 if let Some(background) = &self.background {
-                    let map = parse_img(&background.image_data).unwrap();
+                    let mut map = parse_img(&background.image_data).unwrap();
 
                     let start = Point { row: 14, col: 0 };
                     let goal = Point { row: 44, col: 51 };
+
+                    map.cells[10][10] = Cell::OneWay {
+                        cost: 1,
+                        direction: optimize::Direction::Right,
+                        target: Some(goal),
+                    };
 
                     let finder =
                         PathFinder::new(start, goal, map.create_storage::<Visited<usize, Point>>());
@@ -729,7 +735,11 @@ impl AppImpl<GridMap<usize>> {
                     Cell::Invalid => "#000000".into(),
                     Cell::Valid { cost: 1 } => "#FFFFFF".into(),
                     Cell::Valid { .. } => "#FFFF00".into(),
-                    Cell::OneWay { .. } => "#00FFFF".into(),
+                    // TODO: draw these as arrows!
+                    Cell::OneWay { target: None, .. } => "#00FFFF".into(),
+                    Cell::OneWay {
+                        target: Some(_), ..
+                    } => "#FF00FF".into(),
                 };
 
                 ctx.set_fill_style(&color.into());
