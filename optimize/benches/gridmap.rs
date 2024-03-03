@@ -21,15 +21,16 @@ pub fn map_scaled_factor(c: &mut Criterion) {
     for factor in [1, 2, 3, 4, 5, 6, 7, 8].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(factor), factor, |b, &factor| {
             let (map, start, goal) = load_base_map_scaled(factor);
-            b.iter(|| {
-                let (res, _) = PathFinder::new(
-                    black_box(start),
-                    black_box(goal),
-                    black_box(map.create_storage()),
-                )
-                .finish(&map);
-                assert!(matches!(res, PathFinderState::PathFound(_)));
-            });
+            b.iter_batched(
+                || map.create_storage(),
+                |storage| {
+                    let (res, _) =
+                        PathFinder::new(black_box(start), black_box(goal), black_box(storage))
+                            .finish(&map);
+                    assert!(matches!(res, PathFinderState::PathFound(_)));
+                },
+                criterion::BatchSize::SmallInput,
+            )
         });
     }
     group.finish();
