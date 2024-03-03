@@ -153,9 +153,9 @@ impl<C: Cost> GridMap<C> {
 /// A MapStorage that uses a rectangular grid of cells (a vec in a vec)
 // TODO: change from vec of vec to one single vec -> better cache friendlyness!
 #[derive(Debug)]
-pub struct CellStorage<T>(Vec<Vec<T>>);
+pub struct GridStorage<T>(Vec<Vec<T>>);
 
-impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
+impl<T: Copy + 'static> MapStorage<T> for GridStorage<T> {
     type Reference = Point;
 
     fn is_valid(&self, node: Self::Reference) -> bool {
@@ -175,7 +175,7 @@ impl<T: Copy + 'static> MapStorage<T> for CellStorage<T> {
     }
 }
 
-impl<T: Display> Display for CellStorage<T> {
+impl<T: Display> Display for GridStorage<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.0 {
             for cell in row {
@@ -211,7 +211,7 @@ impl<C: Cost + Display> Display for GridMap<C> {
 
 impl<C: Cost> MapTrait for GridMap<C> {
     type Reference = Point;
-    type Storage<T: Default + Copy + Clone + 'static> = CellStorage<T>;
+    type Storage<T: Default + Copy + Clone + 'static> = GridStorage<T>;
     type Cost = C;
 
     fn is_valid(&self, node: Self::Reference) -> bool {
@@ -323,7 +323,7 @@ impl<C: Cost> MapTrait for GridMap<C> {
     }
 
     fn create_storage<T: Default + Copy + Clone + 'static>(&self) -> Self::Storage<T> {
-        CellStorage(vec![vec![Default::default(); self.columns]; self.rows])
+        GridStorage(vec![vec![Default::default(); self.columns]; self.rows])
     }
 }
 
