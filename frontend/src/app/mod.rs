@@ -7,7 +7,7 @@ use crate::App;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{DynamicImage, GenericImageView};
 use log::debug;
-use optimize::{parse_img, Cell, GridMap, MapTrait, PathFinder, Point, Visited};
+use optimize::{util::parse_img, Cell, GridMap, MapTrait, PathFinder, Point, Visited};
 use optimize::{MapStorage, PathFinderState};
 use std::io::Cursor;
 use wasm_bindgen::Clamped;

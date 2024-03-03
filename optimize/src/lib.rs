@@ -1,3 +1,5 @@
+pub mod util;
+
 use core::panic;
 
 use std::{
@@ -9,7 +11,6 @@ use std::{
     str::FromStr,
 };
 
-use image::{DynamicImage, GenericImageView};
 use serde::{Deserialize, Serialize};
 
 pub trait Cost:
@@ -590,31 +591,6 @@ impl<
     pub fn goal(&self) -> R {
         self.goal
     }
-}
-
-pub fn parse_img(img: &DynamicImage) -> Result<GridMap<usize>, anyhow::Error> {
-    let width = img.width() as usize;
-    let height = img.height() as usize;
-
-    let mut cells = vec![vec![Cell::Invalid; width as usize]; height as usize];
-
-    for row in 0..height {
-        for col in 0..width {
-            let p = img.get_pixel(col as u32, row as u32);
-
-            cells[row][col] = if p.0[0] < 128 {
-                Cell::Invalid
-            } else {
-                Cell::Valid { cost: 1 }
-            }
-        }
-    }
-
-    Ok(GridMap {
-        rows: height,
-        columns: width,
-        cells,
-    })
 }
 
 #[cfg(test)]
