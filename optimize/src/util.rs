@@ -1,6 +1,6 @@
 use image::{DynamicImage, GenericImageView};
 
-use crate::{Cell, GridMap};
+use crate::grid::{Cell, GridMap};
 
 pub fn parse_img(img: &DynamicImage) -> Result<GridMap<usize>, anyhow::Error> {
     let width = img.width() as usize;

@@ -7,8 +7,9 @@ use crate::App;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{DynamicImage, GenericImageView};
 use log::debug;
-use optimize::{util::parse_img, Cell, GridMap, MapTrait, PathFinder, Point, Visited};
-use optimize::{MapStorage, PathFinderState};
+use optimize::find::{MapStorage, MapTrait, PathFinder, PathFinderState, Visited};
+use optimize::grid::{Cell, Direction, GridMap, Point};
+use optimize::util::parse_img;
 use std::io::Cursor;
 use wasm_bindgen::Clamped;
 use wasm_bindgen::JsCast;
@@ -326,7 +327,7 @@ impl AppImpl<GridMap<usize>> {
 
                     map.cells[10][10] = Cell::OneWay {
                         cost: 1,
-                        direction: optimize::Direction::Right,
+                        direction: Direction::Right,
                         target: Some(goal),
                     };
 

@@ -1,7 +1,6 @@
 use gloo::storage::Storage;
 use log::debug;
-use optimize::Cell;
-use optimize::Point;
+use optimize::grid::{Cell, Point};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::RwLock;

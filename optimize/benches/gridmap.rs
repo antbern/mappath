@@ -1,5 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use optimize::{util::parse_img, GridMap, MapTrait, PathFinder, PathFinderState, Point};
+use optimize::{
+    find::{MapTrait, PathFinder, PathFinderState},
+    grid::{GridMap, Point},
+    util::parse_img,
+};
 
 fn load_base_map_scaled(factor: usize) -> (GridMap<usize>, Point, Point) {
     let img = image::open("../data/maze-03_6_threshold.png").unwrap();
