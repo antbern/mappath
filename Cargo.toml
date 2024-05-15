@@ -5,3 +5,6 @@ members = [
     "optimize",
     "frontend",
 ]
+
+default-members = ["frontend"]
+
