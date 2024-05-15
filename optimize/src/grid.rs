@@ -1,11 +1,11 @@
-use crate::find::{Cost, MapStorage, MapTrait, NodeReference};
+use crate::find::{MapStorage, MapTrait, NodeReference, RelativeCost};
 use std::any::Any;
 use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Cell<C: Cost> {
+pub enum Cell<C: RelativeCost> {
     Invalid,
     Valid {
         cost: C,
@@ -19,7 +19,7 @@ pub enum Cell<C: Cost> {
     },
 }
 
-impl<C: Cost> Default for Cell<C> {
+impl<C: RelativeCost> Default for Cell<C> {
     fn default() -> Self {
         Self::Invalid
     }
@@ -62,7 +62,7 @@ impl FromStr for Direction {
     }
 }
 
-impl<C: Cost + Display> Display for Cell<C> {
+impl<C: RelativeCost + Display> Display for Cell<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -97,13 +97,13 @@ impl<C: Cost + Display> Display for Cell<C> {
 
 /// A MapTrait implementation that uses a rectangular grid of cells
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GridMap<C: Cost> {
+pub struct GridMap<C: RelativeCost> {
     pub rows: usize,
     pub columns: usize,
     pub cells: Vec<Vec<Cell<C>>>,
 }
 
-impl<C: Cost> GridMap<C> {
+impl<C: RelativeCost> GridMap<C> {
     pub fn new(rows: usize, columns: usize, default_cost: C) -> Self {
         Self {
             rows,
@@ -196,7 +196,7 @@ pub struct Point {
 
 impl NodeReference for Point {}
 
-impl<C: Cost + Display> Display for GridMap<C> {
+impl<C: RelativeCost + Display> Display for GridMap<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.cells {
             for cell in row {
@@ -209,7 +209,7 @@ impl<C: Cost + Display> Display for GridMap<C> {
     }
 }
 
-impl<C: Cost> MapTrait for GridMap<C> {
+impl<C: RelativeCost> MapTrait for GridMap<C> {
     type Reference = Point;
     type Storage<T: Default + Copy + Clone + 'static> = GridStorage<T>;
     type Cost = C;
@@ -218,10 +218,7 @@ impl<C: Cost> MapTrait for GridMap<C> {
         node.row < self.rows && node.col < self.columns
     }
 
-    fn neighbors_of(
-        &self,
-        node: Self::Reference,
-    ) -> impl Iterator<Item = (Self::Reference, Self::Cost)> {
+    fn neighbors_of(&self, node: Self::Reference) -> impl Iterator<Item = (Self::Reference, C)> {
         let mut points = Vec::with_capacity(4);
 
         let c = self.cells[node.row][node.col];
@@ -400,7 +397,12 @@ mod test {
 
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
+        let finder = PathFinder::new(
+            Point { row: 1, col: 1 },
+            Point { row: 1, col: 5 },
+            visited,
+            (),
+        );
 
         // test the basic case
         assert!(matches!(
@@ -414,7 +416,12 @@ mod test {
 
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 0, col: 5 }, visited);
+        let finder = PathFinder::new(
+            Point { row: 1, col: 1 },
+            Point { row: 0, col: 5 },
+            visited,
+            (),
+        );
         // no route to target
         assert!(matches!(
             finder.finish(&map).0,
@@ -429,7 +436,12 @@ mod test {
         map.cells[3][2] = Cell::Valid { cost: 2 };
         let visited = map.create_storage();
 
-        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
+        let finder = PathFinder::new(
+            Point { row: 1, col: 1 },
+            Point { row: 1, col: 5 },
+            visited,
+            (),
+        );
 
         assert!(matches!(
             finder.finish(&map).0,
@@ -439,7 +451,12 @@ mod test {
         let visited = map.create_storage();
         map.cells[3][2] = Cell::Valid { cost: 4 };
 
-        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
+        let finder = PathFinder::new(
+            Point { row: 1, col: 1 },
+            Point { row: 1, col: 5 },
+            visited,
+            (),
+        );
 
         assert!(matches!(
             finder.finish(&map).0,
@@ -449,7 +466,12 @@ mod test {
         let visited = map.create_storage();
         map.cells[3][2] = Cell::Valid { cost: 10 };
 
-        let finder = PathFinder::new(Point { row: 1, col: 1 }, Point { row: 1, col: 5 }, visited);
+        let finder = PathFinder::new(
+            Point { row: 1, col: 1 },
+            Point { row: 1, col: 5 },
+            visited,
+            (),
+        );
 
         assert!(matches!(
             finder.finish(&map).0,

@@ -18,6 +18,7 @@ fn main() -> Result<(), anyhow::Error> {
         Point { row: 14, col: 0 },
         Point { row: 44, col: 51 },
         visited,
+        (),
     )
     .finish(&map);
 

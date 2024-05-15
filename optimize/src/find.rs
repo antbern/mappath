@@ -8,12 +8,26 @@ use std::{
     ops::{Add, Deref, DerefMut},
 };
 
-pub trait Cost:
-    Copy + Clone + Default + PartialEq + Eq + PartialOrd + Ord + Add<Output = Self> + 'static
-{
+/// Represents an aboslute cost value
+pub trait AbsoluteCost: Copy + Clone + Default + Add<Output = Self> + 'static {
+    type CmpContext;
+    fn context_cmp(&self, other: &Self, ctx: &Self::CmpContext) -> std::cmp::Ordering;
 }
 
-impl Cost for usize {}
+/// Represents a relative change in cost and can therefore be required to implement Equality
+/// operators
+// pub trait RelativeCost<A: Cost>: Copy + Clone + Add<Output = A> + 'static {}
+pub trait RelativeCost: Copy + Clone + Add + PartialEq + Eq + 'static {}
+
+impl RelativeCost for usize {}
+
+impl AbsoluteCost for usize {
+    type CmpContext = ();
+
+    fn context_cmp(&self, other: &Self, _ctx: &Self::CmpContext) -> std::cmp::Ordering {
+        self.cmp(other)
+    }
+}
 
 /// Supertrait that collects all the requirements on the NodeReference values
 /// Must be copy, comparable and not references (hence 'static)
@@ -27,7 +41,7 @@ pub trait MapTrait {
     /// The type that the map uses for storage
     type Storage<T: Default + Copy + Clone + 'static>: MapStorage<T, Reference = Self::Reference>;
 
-    type Cost: Cost;
+    type Cost: RelativeCost;
 
     /// Check if the provided node reference is valid
     fn is_valid(&self, node: Self::Reference) -> bool;
@@ -52,30 +66,36 @@ pub trait MapStorage<T> {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Eq, Debug)]
-struct ToVisit<C, R: Eq> {
+/// A trait that is used to compare two values given a context
+
+/// The objects that we store in the prioirty queue
+#[derive(Debug)]
+struct ToVisit<C: AbsoluteCost, R: Eq> {
+    context: C::CmpContext,
     cost: C,
     point: R,
     from: Option<R>,
 }
 
-impl<C: Ord, R: Eq> Ord for ToVisit<C, R> {
+impl<C: AbsoluteCost, R: Eq> Ord for ToVisit<C, R> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.cost.cmp(&other.cost).reverse() // reverse for BinaryHeap to be a min-heap
+        self.cost.context_cmp(&other.cost, &self.context).reverse() // reverse for BinaryHeap to be a min-heap
     }
 }
 
-impl<C: Ord, R: Eq> PartialOrd for ToVisit<C, R> {
+impl<C: AbsoluteCost, R: Eq> PartialOrd for ToVisit<C, R> {
     fn partial_cmp(&self, other: &ToVisit<C, R>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<C: Eq, R: Eq> PartialEq for ToVisit<C, R> {
+impl<C: AbsoluteCost, R: Eq> PartialEq for ToVisit<C, R> {
     fn eq(&self, other: &ToVisit<C, R>) -> bool {
-        self.cost == other.cost
+        self.cmp(other) == Ordering::Equal
     }
 }
+
+impl<C: AbsoluteCost, R: Eq> Eq for ToVisit<C, R> {}
 
 #[derive(Clone, Copy, Debug)]
 pub struct VisitedItem<C, R> {
@@ -127,15 +147,23 @@ pub enum PathFinderState<C, R> {
     PathFound(PathResult<C, R>),
 }
 
+impl<C, R> PathFinderState<C, R> {
+    fn is_done(&self) -> bool {
+        !matches!(self, PathFinderState::Computing)
+    }
+}
+
 #[derive(Debug)]
 pub struct PathFinder<
     R: NodeReference,
-    C: Cost,
+    K, // the context for contextord
+    C: AbsoluteCost<CmpContext = K>,
     S: MapStorage<Visited<C, R>, Reference = R>,
     M: MapTrait<Reference = R, Storage<Visited<C, R>> = S, Cost = C>,
 > {
     start: R,
     goal: R,
+    context: K,
     visited: S,
     visit_list: BinaryHeap<ToVisit<C, R>>,
     state: PathFinderState<C, R>,
@@ -144,17 +172,20 @@ pub struct PathFinder<
 
 impl<
         R: NodeReference,
-        C: Cost + Display,
+        K: Clone, // the context for contextord
+        C: AbsoluteCost<CmpContext = K> + Display,
         S: MapStorage<Visited<C, R>, Reference = R>,
         M: MapTrait<Reference = R, Storage<Visited<C, R>> = S, Cost = C>,
-    > PathFinder<R, C, S, M>
+    > PathFinder<R, K, C, S, M>
 {
-    pub fn new(start: R, goal: R, visited: S) -> Self {
+    pub fn new(start: R, goal: R, visited: S, context: K) -> Self {
         Self {
             start,
             goal,
             visited,
+            context: context.clone(),
             visit_list: BinaryHeap::from([ToVisit {
+                context,
                 cost: Default::default(),
                 point: start,
                 from: None,
@@ -174,7 +205,7 @@ impl<
     }
 
     pub fn step(&mut self, map: &M) -> PathFinderState<C, R> {
-        if self.state != PathFinderState::Computing {
+        if self.state.is_done() {
             return self.state.clone();
         }
         if let Some(visit) = self.visit_list.pop() {
@@ -234,6 +265,7 @@ impl<
             for (point, move_cost) in map.neighbors_of(visit.point) {
                 if !self.visited.get(point).is_some() {
                     self.visit_list.push(ToVisit {
+                        context: self.context.clone(),
                         cost: visit.cost + move_cost,
                         point: point,
                         from: Some(visit.point),

@@ -7,7 +7,7 @@ use crate::App;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{DynamicImage, GenericImageView};
 use log::debug;
-use optimize::find::{MapStorage, MapTrait, PathFinder, PathFinderState, Visited};
+use optimize::find::{AbsoluteCost, MapStorage, MapTrait, PathFinder, PathFinderState, Visited};
 use optimize::grid::{Cell, Direction, GridMap, Point};
 use optimize::util::parse_img;
 use std::io::Cursor;
@@ -23,15 +23,29 @@ const STORAGE_KEY_BACKGROUND: &str = "background";
 
 pub(crate) trait AppMapTrait:
     MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>
+where
+    <Self as MapTrait>::Cost: AbsoluteCost,
 {
 }
-impl<T> AppMapTrait for T where T: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de> {}
+impl<T> AppMapTrait for T
+where
+    T: MapTrait + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    <T as MapTrait>::Cost: AbsoluteCost,
+{
+}
 
-pub struct AppImpl<M: AppMapTrait> {
+type CmpCtx = ();
+
+pub struct AppImpl<M, K>
+where
+    M: AppMapTrait,
+    K: Ord,
+    <M as MapTrait>::Cost: AbsoluteCost<CmpContext = K>,
+{
     editing: bool,
     map: M,
 
-    find_state: Option<FindState<M>>,
+    find_state: Option<FindState<M, K>>,
     start: Option<M::Reference>,
     goal: Option<M::Reference>,
     auto_step: bool,
@@ -46,7 +60,7 @@ pub struct AppImpl<M: AppMapTrait> {
     camera: Camera,
 
     // for doing interactive selections with the mouse
-    mouse_select_state: Option<MouseSelectState<M>>,
+    mouse_select_state: Option<MouseSelectState<M, K>>,
     // background stuff
     background: Option<Background>,
     map_alpha: f64,
@@ -61,12 +75,22 @@ struct Selection<R> {
     end: R,
 }
 
-struct FindState<M: AppMapTrait> {
-    pathfinder: PathFinder<M::Reference, M::Cost, M::Storage<Visited<M::Cost, M::Reference>>, M>,
+struct FindState<M, K>
+where
+    M: AppMapTrait,
+    K: Ord,
+    <M as MapTrait>::Cost: AbsoluteCost<CmpContext = K>,
+{
+    pathfinder: PathFinder<M::Reference, K, M::Cost, M::Storage<Visited<M::Cost, M::Reference>>, M>,
 }
 
-struct MouseSelectState<M: AppMapTrait> {
-    callback: Box<dyn FnOnce(&mut AppImpl<M>, &Context, MouseEvent)>,
+struct MouseSelectState<M, K>
+where
+    M: AppMapTrait,
+    K: Ord,
+    <M as MapTrait>::Cost: AbsoluteCost<CmpContext = K>,
+{
+    callback: Box<dyn FnOnce(&mut AppImpl<M, K>, &Context, MouseEvent)>,
 }
 
 struct Background {
@@ -95,7 +119,7 @@ impl From<&Background> for SerializableBackground {
     }
 }
 
-impl AppImpl<GridMap<usize>> {
+impl AppImpl<GridMap<usize>, CmpCtx> {
     pub async fn new(context: &Context) -> Self {
         // if the map has been stored in the browser, get it from there
         let map = if let Some(map) = context.get_storage::<GridMap<usize>>(STORAGE_KEY_MAP) {
@@ -143,7 +167,7 @@ impl AppImpl<GridMap<usize>> {
     }
 }
 
-impl App for AppImpl<GridMap<usize>> {
+impl App for AppImpl<GridMap<usize>, CmpCtx> {
     async fn render(&mut self, context: &Context, ctx: &CanvasRenderingContext2d) {
         // handle any pending events
         while let Some(event) = context.pop_event() {
@@ -156,7 +180,7 @@ impl App for AppImpl<GridMap<usize>> {
         self.render_app(context, ctx);
     }
 }
-impl AppImpl<GridMap<usize>> {
+impl AppImpl<GridMap<usize>, CmpCtx> {
     async fn handle_event(&mut self, event: Event, context: &Context) {
         // switch mode if the mode buttons were pressed
         match event {
@@ -331,8 +355,12 @@ impl AppImpl<GridMap<usize>> {
                         target: Some(goal),
                     };
 
-                    let finder =
-                        PathFinder::new(start, goal, map.create_storage::<Visited<usize, Point>>());
+                    let finder = PathFinder::new(
+                        start,
+                        goal,
+                        map.create_storage::<Visited<usize, Point>>(),
+                        (),
+                    );
 
                     self.map = map;
                     self.goal = Some(goal);
@@ -641,6 +669,7 @@ impl AppImpl<GridMap<usize>> {
                     start,
                     goal,
                     self.map.create_storage::<Visited<usize, Point>>(),
+                    (),
                 ),
             });
         }
@@ -655,6 +684,7 @@ impl AppImpl<GridMap<usize>> {
                             start,
                             goal,
                             self.map.create_storage::<Visited<usize, Point>>(),
+                            (),
                         ),
                     });
                 }
@@ -693,6 +723,7 @@ impl AppImpl<GridMap<usize>> {
                                 start,
                                 goal,
                                 self.map.create_storage::<Visited<usize, Point>>(),
+                                (),
                             ),
                         });
                     }

@@ -29,7 +29,7 @@ pub fn map_scaled_factor(c: &mut Criterion) {
                 || map.create_storage(),
                 |storage| {
                     let (res, _) =
-                        PathFinder::new(black_box(start), black_box(goal), black_box(storage))
+                        PathFinder::new(black_box(start), black_box(goal), black_box(storage), ())
                             .finish(&map);
                     assert!(matches!(res, PathFinderState::PathFound(_)));
                 },
