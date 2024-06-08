@@ -36,7 +36,9 @@ jobs:
         # this is necessary for github pages where the site is deployed to username.github.io/repo_name and all files must be requested
         # relatively as eframe_template/favicon.ico. if we skip public-url option, the href paths will instead request username.github.io/favicon.ico which
         # will obviously return error 404 not found.
-        run: ./trunk build frontend/index.html --release --public-url "${GITHUB_REPOSITORY#*/}"
+        run: ./trunk build frontend/index.html --release --public-url $public_url
+        env:
+          public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
 
       - name: Disable jekyll
         # we can include a .nojekyll file in the deployment to disable jekyll
