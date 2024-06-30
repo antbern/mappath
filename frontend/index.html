@@ -1,139 +1,140 @@
 <!DOCTYPE html>
 <html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<!-- Disable zooming: -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <head>
-	<meta charset="utf-8" />
-	<link data-trunk rel="css" href="style.css">
-	<title>Path Finder</title>
+    <!-- change this to your project name -->
+    <title>eframe template</title>
+
+    <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
+    <link data-trunk rel="rust" data-wasm-opt="2" />
+    <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
+    <base data-trunk-public-url />
+
+    <link data-trunk rel="icon" href="assets/favicon.ico">
+
+
+    <link data-trunk rel="copy-file" href="assets/sw.js" />
+    <link data-trunk rel="copy-file" href="assets/manifest.json" />
+    <link data-trunk rel="copy-file" href="assets/icon-1024.png" />
+    <link data-trunk rel="copy-file" href="assets/icon-256.png" />
+    <link data-trunk rel="copy-file" href="assets/icon_ios_touch_192.png" />
+    <link data-trunk rel="copy-file" href="assets/maskable_icon_x512.png" />
+
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon_ios_touch_192.png">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
+
+    <style>
+        html {
+            /* Remove touch delay: */
+            touch-action: manipulation;
+        }
+
+        body {
+            /* Light mode background color for what is not covered by the egui canvas,
+            or where the egui canvas is translucent. */
+            background: #909090;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                /* Dark mode background color for what is not covered by the egui canvas,
+                or where the egui canvas is translucent. */
+                background: #404040;
+            }
+        }
+
+        /* Allow canvas to fill entire web page: */
+        html,
+        body {
+            overflow: hidden;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Position canvas in center-top: */
+        canvas {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 0%;
+            left: 50%;
+            transform: translate(-50%, 0%);
+        }
+
+        .centered {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f0f0f0;
+            font-size: 24px;
+            font-family: Ubuntu-Light, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        /* ---------------------------------------------- */
+        /* Loading animation from https://loading.io/css/ */
+        .lds-dual-ring {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+        }
+
+        .lds-dual-ring:after {
+            content: " ";
+            display: block;
+            width: 24px;
+            height: 24px;
+            margin: 0px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            border-color: #fff transparent #fff transparent;
+            animation: lds-dual-ring 1.2s linear infinite;
+        }
+
+        @keyframes lds-dual-ring {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+    </style>
 </head>
 
 <body>
-	<div class="content">
-		<div class="row">
-			<div class="column-controls">
+    <!-- The WASM code will resize the canvas dynamically -->
+    <!-- the id is hardcoded in main.rs . so, make sure both match. -->
+    <canvas id="the_canvas_id"></canvas>
 
-				<button id="btn-clear-storage">Clear Stored Map</button>
-				<button id="btn-mode-edit">Toggle [E]dit</button>
-
-				<fieldset id="edit-inputs">
-					<legend>Edit</legend>
-
-					<details>
-						<summary>Presets</summary>
-						<button id="btn-load-preset">Load Preset</button>
-					</details>
-					<hr />
-					<details>
-						<summary>Step 1: Choose background</summary>
-
-						<select id="input-select-background">
-							<option value="file">Choose File...</option>
-							<option value="maze">Maze</option>
-							<option value="maze_map">Maze Map</option>
-						</select>
-						<button id="btn-load-background">Load</button>
-						<input type="file" id="input-file" accept="image/png, image/jpeg">
-					</details>
-
-					<hr />
-					<details>
-						<summary>Step 2: Decide Grid Size</summary>
-						<input type="number" id="input-background-scale" value="1">
-						<label for="input-background-scale">Scale</label><br>
-						<!-- add some buttons for the auto features  -->
-
-						<input type="number" id="input-auto-scale-factor" value="1">
-						<label for="input-auto-scale-factor">Pixels Per Cell</label>
-						<button id="btn-auto-scale">Auto Scale</button><br>
-
-						<input type="number" id="input-rows"><label for="input-rows">Rows</label> <br>
-						<input type="number" id="input-cols"><label for="input-cols">Columns</label><br>
-						<button id="btn-double-map">Double Map</button>
-					</details>
-
-					<hr />
-					<details open>
-						<summary>Step 3: Edit Cells</summary>
-						<input type="radio" name="cell" value="invalid" id="cell-invalid">
-						<label for="cell-invalid">: Invalid</label><br />
-
-						<input type="radio" name="cell" value="normal" id="cell-normal">
-						<label for="cell-normal">: Normal</label>
-						<input type="number" id="input-normal-cost" value="1">
-						<br />
-
-						<input type="radio" name="cell" value="oneway" id="cell-oneway">
-						<label for="cell-oneway">: One-Way</label>
-						<select id="select-oneway">
-							<option value="up">Up</option>
-							<option value="down">Down</option>
-							<option value="left">Left</option>
-							<option value="right">Right</option>
-						</select><br>
-						Target: <span id="span-oneway-target"></span>
-						<button id="btn-oneway-target-clear"
-							onclick="getElementById('span-oneway-target').innerHTML=''">Clear</button>
-						<button id="btn-oneway-target-set">Set</button>
-						<br />
-
-						<button id="btn-auto-create-map">Auto Fill Map</button>
-						<br />
-						<button id="btn-edit-save">[S]ave</button>
-					</details>
-
-					<button id="btn-select-point">Select [P]oint</button>
-
-
-
-				</fieldset>
-
-
-				<div id="mode-find-inputs">
-					<input type="checkbox" id="input-auto-step" checked><label for="input-auto-step">Auto
-						Step</label><br>
-					<button id="btn-reset">[R]eset</button>
-					<button id="btn-step">S[t]ep</button>
-					<button id="btn-finish">[F]inish</button>
-				</div>
-				<div id="general-inputs">
-					<input type="range" id="input-background-alpha" min="0" max="1" step="0.01" value="0.5">
-					<label for="input-background-alpha">Background Alpha</label>
-					<br />
-					<input type="range" id="input-foreground-alpha" min="0" max="1" step="0.01" value="1">
-					<label for="input-foreground-alpha">Foreground Alpha</label>
-					<br />
-					<input type="checkbox" id="input-draw-grid" checked>
-					<label for="input-draw-grid">Draw Grid</label><br>
-					<input type="checkbox" id="input-draw-pathfind-debug" checked>
-					<label for="input-draw-pathfind-debug">Draw Path Debug</label><br>
-				</div>
-
-				<!-- <input type="radio" id="select-mode-radio-setup" name="select-mode-radio" value="setup"> -->
-				<!-- <label for="select-mode-radio-setup">0. Setup</label><br> -->
-				<!-- <input type="radio" id="select-mode-radio-edit" name="select-mode-radio" value="edit"> -->
-				<!-- <label for="select-mode-radio-edit">1. Edit Cells</label><br> -->
-				<!-- <input type="radio" id="select-mode-radio-find" name="select-mode-radio" value="find"> -->
-				<!-- <label for="select-mode-radio-find">2. Find Paths</label> -->
-				<br />
-				<div>
-					<p>Click and drag while holding Ctrl to pan.</p>
-					<p>In path finding mode: Click to select start, Shift-Click to select goal.</p>
-				</div>
-
-				<div>
-					<!-- add a footer with the commit hash  -->
-					<p>Version <a href="" id="github-link"> <code id="commit-hash">local</code></a></p>
-				</div>
-			</div>
-			<div class="column-canvas">
-				<canvas id="canvas" oncontextmenu="return false;"></canvas>
-			</div>
-			<div class="column-output">
-				<pre id="output"></pre>
-			</div>
-		</div>
-	</div>
-
+    <!--Register Service Worker. this will cache the wasm / js scripts for offline use (for PWA functionality). -->
+    <!-- Force refresh (Ctrl + F5) to load the latest files instead of cached files  -->
+    <script>
+        // We disable caching during development so that we always view the latest version.
+        if ('serviceWorker' in navigator && window.location.hash !== "#dev") {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js');
+            });
+        }
+    </script>
 </body>
 
 </html>
+
+<!-- Powered by egui: https://github.com/emilk/egui/ -->
