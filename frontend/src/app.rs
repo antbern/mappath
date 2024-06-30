@@ -4,6 +4,7 @@ use eframe::{egui_glow, glow};
 use egui::{mutex::Mutex, Pos2, Vec2};
 use graphics::{camera::Camera, primitiverenderer::Color, shaperenderer::ShapeRenderer};
 use nalgebra::{Matrix4, Point2};
+use optimize::grid::{Cell, GridMap};
 
 pub struct App {
     /// Behind an `Arc<Mutex<…>>` so we can pass it to [`egui::PaintCallback`] and paint later.
@@ -18,6 +19,8 @@ pub struct App {
 struct State {
     label: String,
     value: f32,
+    map: GridMap<usize>,
+    draw_grid_lines: bool,
 }
 
 impl Default for State {
@@ -25,6 +28,8 @@ impl Default for State {
         Self {
             value: 0.0,
             label: "Hello, world!".to_owned(),
+            map: GridMap::new(10, 10, 1),
+            draw_grid_lines: true,
         }
     }
 }
@@ -88,22 +93,7 @@ impl eframe::App for App {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("eframe template");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.state.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.state.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.state.value += 1.0;
-            }
-
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
+            ui.checkbox(&mut self.state.draw_grid_lines, "Draw grid lines");
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
@@ -119,9 +109,52 @@ impl eframe::App for App {
 
                 world
                     .sr
-                    .begin(graphics::primitiverenderer::PrimitiveType::Line);
-                world.sr.line(0.0, 0.0, 1.0, 1.0, Color::RED);
+                    .begin(graphics::primitiverenderer::PrimitiveType::Filled);
+                for row in 0..self.state.map.rows {
+                    for col in 0..self.state.map.columns {
+                        let cell = self.state.map.cells[row][col];
+
+                        let color = match cell {
+                            Cell::Invalid => Color::BLACK,
+                            Cell::Valid { cost: 1 } => Color::WHITE,
+                            Cell::Valid { .. } => Color::rgba_u8(255, 255, 0, 255),
+                            // TODO: draw these as arrows!
+                            Cell::OneWay { target: None, .. } => Color::rgba_u8(0, 255, 255, 255),
+                            Cell::OneWay {
+                                target: Some(_), ..
+                            } => Color::rgba_u8(255, 0, 255, 255),
+                        };
+
+                        world.sr.rect(col as f32, row as f32, 1.0, 1.0, color);
+                    }
+                }
                 world.sr.end();
+
+                if self.state.draw_grid_lines {
+                    world
+                        .sr
+                        .begin(graphics::primitiverenderer::PrimitiveType::Filled);
+                    for row in 0..=self.state.map.rows {
+                        world.sr.line(
+                            0.0,
+                            row as f32,
+                            self.state.map.columns as f32,
+                            row as f32,
+                            Color::rgba_u8(0, 0, 0, 255),
+                        );
+                    }
+                    for col in 0..=self.state.map.columns {
+                        world.sr.line(
+                            col as f32,
+                            0.0,
+                            col as f32,
+                            self.state.map.rows as f32,
+                            Color::rgba_u8(0, 0, 0, 255),
+                        );
+                    }
+
+                    world.sr.end();
+                }
             }
 
             self.custom_painting(ui);
