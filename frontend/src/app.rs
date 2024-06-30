@@ -1,16 +1,22 @@
 use std::sync::Arc;
 
 use eframe::{egui_glow, glow};
-use egui::{mutex::Mutex, Pos2, Vec2};
+use egui::{mutex::Mutex, ColorImage, Pos2, Vec2};
 use graphics::{camera::Camera, primitiverenderer::Color, shaperenderer::ShapeRenderer};
+use image::DynamicImage;
 use nalgebra::{Matrix4, Point2};
-use optimize::grid::{Cell, GridMap};
+use optimize::{
+    find::{MapTrait, PathFinder, Visited},
+    grid::{Cell, Direction, GridMap, Point},
+    util::parse_img,
+};
 
 pub struct App {
     /// Behind an `Arc<Mutex<…>>` so we can pass it to [`egui::PaintCallback`] and paint later.
     world_renderer: Arc<Mutex<WorldRenderer>>,
 
     state: State,
+    background: Option<DynamicImage>,
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -21,6 +27,9 @@ struct State {
     value: f32,
     map: GridMap<usize>,
     draw_grid_lines: bool,
+    is_editing: bool,
+    start: Option<Point>,
+    goal: Option<Point>,
 }
 
 impl Default for State {
@@ -30,6 +39,9 @@ impl Default for State {
             label: "Hello, world!".to_owned(),
             map: GridMap::new(10, 10, 1),
             draw_grid_lines: true,
+            is_editing: false,
+            start: None,
+            goal: None,
         }
     }
 }
@@ -55,8 +67,21 @@ impl App {
         App {
             state,
             world_renderer: Arc::new(Mutex::new(WorldRenderer::new(gl))),
+            background: None,
         }
     }
+
+    fn set_background(&mut self, image_data: &[u8]) {
+        let image = image::load_from_memory(image_data).unwrap();
+        self.background = Some(image);
+    }
+}
+fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::ImageError> {
+    let image = image::load_from_memory(image_data)?;
+    let size = [image.width() as _, image.height() as _];
+    let image_buffer = image.to_rgba8();
+    let pixels = image_buffer.as_flat_samples();
+    Ok(ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
 }
 
 impl eframe::App for App {
@@ -93,6 +118,37 @@ impl eframe::App for App {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("eframe template");
 
+            if ui.button("Load Preset").clicked() {
+                self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
+
+                if let Some(background) = &self.background {
+                    let mut map = parse_img(background).unwrap();
+
+                    let start = Point { row: 14, col: 0 };
+                    let goal = Point { row: 44, col: 51 };
+
+                    map.cells[10][10] = Cell::OneWay {
+                        cost: 1,
+                        direction: Direction::Right,
+                        target: Some(goal),
+                    };
+
+                    // let finder = PathFinder::new(
+                    //     start,
+                    //     goal,
+                    //     map.create_storage::<Visited<usize, Point>>(),
+                    //     (),
+                    // );
+
+                    self.state.map = map;
+                    self.state.goal = Some(goal);
+                    self.state.start = Some(start);
+
+                    // self.state.find_state = Some(FindState { pathfinder: finder });
+
+                    // self.on_map_change(context);
+                }
+            }
             ui.checkbox(&mut self.state.draw_grid_lines, "Draw grid lines");
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -127,6 +183,17 @@ impl eframe::App for App {
 
                         world.sr.rect(col as f32, row as f32, 1.0, 1.0, color);
                     }
+                }
+                if let Some(goal) = self.state.goal {
+                    world
+                        .sr
+                        .rect(goal.col as f32, goal.row as f32, 1.0, 1.0, Color::RED);
+                }
+
+                if let Some(start) = self.state.start {
+                    world
+                        .sr
+                        .rect(start.col as f32, start.row as f32, 1.0, 1.0, Color::GREEN);
                 }
                 world.sr.end();
 
