@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use eframe::{egui_glow, glow};
 use egui::{mutex::Mutex, ColorImage, Pos2, Vec2};
@@ -6,7 +6,7 @@ use graphics::{camera::Camera, primitiverenderer::Color, shaperenderer::ShapeRen
 use image::DynamicImage;
 use nalgebra::{Matrix4, Point2};
 use optimize::{
-    find::{MapTrait, PathFinder, Visited},
+    find::{MapStorage, MapTrait, PathFinder, PathFinderState, Visited},
     grid::{Cell, Direction, GridMap, Point},
     util::parse_img,
 };
@@ -18,7 +18,24 @@ pub struct App {
     state: State,
     background: Option<DynamicImage>,
     output_cell: String,
+    output_pathfinder: String,
+    pathfinder: Option<
+        PathFinder<
+            <GridMap<usize> as MapTrait>::Reference,
+            CmpCtx,
+            usize,
+            <GridMap<usize> as MapTrait>::Storage<
+                Visited<
+                    <GridMap<usize> as MapTrait>::Cost,
+                    <GridMap<usize> as MapTrait>::Reference,
+                >,
+            >,
+            GridMap<usize>,
+        >,
+    >,
 }
+
+type CmpCtx = ();
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -28,9 +45,11 @@ struct State {
     value: f32,
     map: GridMap<usize>,
     draw_grid_lines: bool,
+    draw_pathfind_debug: bool,
     is_editing: bool,
     start: Option<Point>,
     goal: Option<Point>,
+    auto_step: bool,
 }
 
 impl Default for State {
@@ -40,9 +59,11 @@ impl Default for State {
             label: "Hello, world!".to_owned(),
             map: GridMap::new(10, 10, 1),
             draw_grid_lines: true,
+            draw_pathfind_debug: true,
             is_editing: false,
             start: None,
             goal: None,
+            auto_step: true,
         }
     }
 }
@@ -70,6 +91,8 @@ impl App {
             world_renderer: Arc::new(Mutex::new(WorldRenderer::new(gl))),
             background: None,
             output_cell: Default::default(),
+            pathfinder: None,
+            output_pathfinder: Default::default(),
         }
     }
 
@@ -183,23 +206,59 @@ impl eframe::App for App {
                         target: Some(goal),
                     };
 
-                    // let finder = PathFinder::new(
-                    //     start,
-                    //     goal,
-                    //     map.create_storage::<Visited<usize, Point>>(),
-                    //     (),
-                    // );
+                    let finder = PathFinder::new(
+                        start,
+                        goal,
+                        map.create_storage::<Visited<usize, Point>>(),
+                        (),
+                    );
 
                     self.state.map = map;
                     self.state.goal = Some(goal);
                     self.state.start = Some(start);
 
-                    // self.state.find_state = Some(FindState { pathfinder: finder });
+                    self.pathfinder = Some(finder);
 
                     // self.on_map_change(context);
                 }
             }
             ui.checkbox(&mut self.state.draw_grid_lines, "Draw grid lines");
+            ui.checkbox(&mut self.state.draw_pathfind_debug, "Draw Pathfind Debug");
+
+            if let Some(pathfinder) = &mut self.pathfinder {
+                ui.label("Pathfinder");
+                ui.horizontal(|ui| {
+                    if ui.button("Reset").clicked() {
+                        if let (Some(start), Some(goal)) = (self.state.start, self.state.goal) {
+                            *pathfinder = PathFinder::new(
+                                start,
+                                goal,
+                                self.state.map.create_storage::<Visited<usize, Point>>(),
+                                (),
+                            );
+                        }
+                    }
+                    if ui.button("Step").clicked() {
+                        pathfinder.step(&self.state.map);
+                    }
+
+                    if ui.button("Finish").clicked() {
+                        loop {
+                            match pathfinder.step(&self.state.map) {
+                                PathFinderState::Computing => {}
+                                _s => break,
+                            }
+                        }
+                    }
+                });
+                ui.checkbox(&mut self.state.auto_step, "Auto Step");
+                if self.state.auto_step {
+                    pathfinder.step(&self.state.map);
+                    ctx.request_repaint_after(Duration::from_millis(20));
+                }
+            }
+
+            ui.label(&self.output_pathfinder);
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
@@ -269,6 +328,100 @@ impl eframe::App for App {
                     // draw lines to the neighbors of the currently hovered cell
                     self.draw_neighbors(&point, &mut world.sr, Color::GREEN);
                 }
+
+                if let Some(pathfinder) = &self.pathfinder {
+                    let visited = pathfinder.get_visited();
+
+                    if self.state.draw_pathfind_debug {
+                        let margin = 0.15;
+                        world
+                            .sr
+                            .begin(graphics::primitiverenderer::PrimitiveType::Filled);
+                        for row in 0..self.state.map.rows {
+                            for col in 0..self.state.map.columns {
+                                let p = Point { row, col };
+                                let v = visited.get(p);
+
+                                if let Some(f) = *v {
+                                    let color = Color::rgba(
+                                        (f.cost as f32 / 255.0).min(1.0),
+                                        0.0,
+                                        0.0,
+                                        0.8,
+                                    );
+
+                                    world.sr.rect(
+                                        col as f32 + margin,
+                                        row as f32 + margin,
+                                        1.0 - 2.0 * margin,
+                                        1.0 - 2.0 * margin,
+                                        color,
+                                    );
+                                }
+                            }
+                        }
+                        world.sr.end();
+                    }
+
+                    match pathfinder.state() {
+                        PathFinderState::Computing => {}
+                        PathFinderState::NoPathFound => {
+                            self.output_pathfinder = "No path found".to_string();
+                        }
+                        PathFinderState::PathFound(pr) => {
+                            let color = Color::GREEN;
+
+                            world
+                                .sr
+                                .begin(graphics::primitiverenderer::PrimitiveType::Line);
+                            // the width is set relative to the size of one cell
+                            if let Some(start) = pr.path.first() {
+                                world.sr.line(
+                                    start.col as f32 + 0.5,
+                                    start.row as f32 + 0.5,
+                                    pr.start.col as f32 + 0.5,
+                                    pr.start.row as f32 + 0.5,
+                                    color,
+                                );
+                            }
+                            for p in pr.path.windows(2) {
+                                world.sr.line(
+                                    p[0].col as f32 + 0.5,
+                                    p[0].row as f32 + 0.5,
+                                    p[1].col as f32 + 0.5,
+                                    p[1].row as f32 + 0.5,
+                                    color,
+                                );
+                            }
+                            if let Some(end) = pr.path.last() {
+                                world.sr.line(
+                                    end.col as f32 + 0.5,
+                                    end.row as f32 + 0.5,
+                                    pr.goal.col as f32 + 0.5,
+                                    pr.goal.row as f32 + 0.5,
+                                    color,
+                                );
+                            }
+                            world.sr.end();
+                        }
+                    }
+
+                    // // get the cell the user is hovering
+                    // if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
+                    //     if let Some(point) = self.mouse_to_world_point_valid(x, y) {
+                    //         ctx.set_fill_style(&"#00FF00".into());
+                    //         ctx.fill_rect(point.col as f64, point.row as f64, 1.0, 1.0);
+                    //
+                    //         let v = visited.get(point);
+                    //
+                    //         context.set_output(&format!(
+                    //             "Cell @{}:{}\n{:#?}\n\n{:#?}",
+                    //             point.row, point.col, self.map.cells[point.row][point.col], v
+                    //         ));
+                    //     }
+                    // }
+                }
+
                 if self.state.draw_grid_lines {
                     world
                         .sr
