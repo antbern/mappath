@@ -1,8 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use eframe::{egui_glow, glow};
-use egui::{mutex::Mutex, ColorImage, Pos2, Vec2};
-use graphics::{camera::Camera, primitiverenderer::Color, shaperenderer::ShapeRenderer};
+use egui::{mutex::Mutex, Pos2, Vec2};
+use graphics::{
+    camera::Camera,
+    primitiverenderer::Color,
+    primitiverenderer_texture::{PrimitiveRendererTexture, RenderTexture},
+    shaperenderer::ShapeRenderer,
+};
 use image::DynamicImage;
 use nalgebra::{Matrix4, Point2};
 use optimize::{
@@ -16,7 +21,7 @@ pub struct App {
     world_renderer: Arc<Mutex<WorldRenderer>>,
 
     state: State,
-    background: Option<DynamicImage>,
+    background: Option<Background>,
     output_cell: String,
     output_pathfinder: String,
     pathfinder: Option<
@@ -68,6 +73,13 @@ impl Default for State {
     }
 }
 
+struct Background {
+    image_data: DynamicImage,
+    // image: ColorImage,
+    // texture_handle: egui::TextureHandle,
+    scale: f32,
+}
+
 impl App {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -98,7 +110,13 @@ impl App {
 
     fn set_background(&mut self, image_data: &[u8]) {
         let image = image::load_from_memory(image_data).unwrap();
-        self.background = Some(image);
+
+        self.world_renderer.lock().texture = Texture::New(image.clone());
+
+        self.background = Some(Background {
+            image_data: image,
+            scale: 2.0,
+        });
     }
 
     fn draw_neighbors(&self, point: &Point, sr: &mut ShapeRenderer, color: Color) {
@@ -131,6 +149,7 @@ impl App {
         }
         sr.end();
     }
+
     fn mouse_world_to_point_valid(&self, x: f32, y: f32) -> Option<Point> {
         if x < 0.0 || y < 0.0 {
             return None;
@@ -145,13 +164,6 @@ impl App {
             None
         }
     }
-}
-fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::ImageError> {
-    let image = image::load_from_memory(image_data)?;
-    let size = [image.width() as _, image.height() as _];
-    let image_buffer = image.to_rgba8();
-    let pixels = image_buffer.as_flat_samples();
-    Ok(ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
 }
 
 impl eframe::App for App {
@@ -194,7 +206,7 @@ impl eframe::App for App {
                 self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
 
                 if let Some(background) = &self.background {
-                    let mut map = parse_img(background).unwrap();
+                    let mut map = parse_img(&background.image_data).unwrap();
 
                     let start = Point { row: 14, col: 0 };
                     let goal = Point { row: 44, col: 51 };
@@ -259,6 +271,12 @@ impl eframe::App for App {
             }
 
             ui.label(&self.output_pathfinder);
+            // if let Some(background) = &self.background {
+            //     ui.image((
+            //         background.texture_handle.id(),
+            //         background.texture_handle.size_vec2(),
+            //     ));
+            // }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
@@ -271,6 +289,64 @@ impl eframe::App for App {
             // Let all nodes do their drawing. Explicit scope for MutexGuard lifetime.
             {
                 let mut world = self.world_renderer.lock();
+
+                // draws the background image
+                if let Some(background) = &self.background {
+                    world
+                        .pr_texture
+                        .begin(graphics::primitiverenderer::PrimitiveType::Filled);
+                    let x = 0.0;
+                    let y = 0.0;
+                    let width = background.image_data.width() as f32 * background.scale;
+                    let height = background.image_data.height() as f32 * background.scale;
+                    let color = Color::WHITE;
+
+                    log::info!(
+                        "Drawing background image: {}x{} at {}:{}",
+                        width,
+                        height,
+                        x,
+                        y
+                    );
+
+                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 0.0);
+                    world.pr_texture.xyzc(x + width, y, 0.0, color, 1.0, 0.0);
+                    world
+                        .pr_texture
+                        .xyzc(x + width, y + height, 0.0, color, 1.0, 1.0);
+                    world
+                        .pr_texture
+                        .xyzc(x + width, y + height, 0.0, color, 1.0, 1.0);
+                    world.pr_texture.xyzc(x, y + height, 0.0, color, 0.0, 1.0);
+                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 0.0);
+
+                    // world.pr_texture.xyzc(0.0, 0.0, 0.0, Color::WHITE, 0.0, 0.0);
+                    // world.pr_texture.xyzc(
+                    //     background.image_data.width() as f32 * background.scale,
+                    //     0.0,
+                    //     0.0,
+                    //     Color::WHITE,
+                    //     1.0,
+                    //     0.0,
+                    // );
+                    // world.pr_texture.xyzc(
+                    //     background.image_data.width() as f32 * background.scale,
+                    //     background.image_data.height() as f32 * background.scale,
+                    //     0.0,
+                    //     Color::WHITE,
+                    //     1.0,
+                    //     1.0,
+                    // );
+                    // world.pr_texture.xyzc(
+                    //     0.0,
+                    //     background.image_data.height() as f32 * background.scale,
+                    //     0.0,
+                    //     Color::WHITE,
+                    //     0.0,
+                    //     1.0,
+                    // );
+                    world.pr_texture.end();
+                }
 
                 world
                     .sr
@@ -491,12 +567,12 @@ impl App {
             None
         };
 
-        // Clone locals so we can move them into the paint callback:
-
         let mut drag_delta = response.drag_delta();
         drag_delta.y *= -1.0;
 
         let size = rect.size();
+
+        // Clone locals so we can move them into the paint callback:
         let world_renderer = self.world_renderer.clone();
 
         let callback = egui::PaintCallback {
@@ -513,8 +589,15 @@ impl App {
 
 pub struct WorldRenderer {
     pub sr: ShapeRenderer,
+    pub pr_texture: PrimitiveRendererTexture,
     camera: Camera,
     pub last_mouse_pos: Point2<f32>,
+    pub texture: Texture,
+}
+pub enum Texture {
+    None,
+    New(DynamicImage),
+    Existing(RenderTexture),
 }
 
 impl WorldRenderer {
@@ -523,8 +606,10 @@ impl WorldRenderer {
 
         Self {
             sr: ShapeRenderer::new(gl),
+            pr_texture: PrimitiveRendererTexture::new(gl, 1000),
             camera: Camera::new(),
             last_mouse_pos: Point2::new(0.0, 0.0),
+            texture: Texture::None,
         }
     }
 
@@ -556,13 +641,38 @@ impl WorldRenderer {
         // set the correct MVP matrix for the shape renderer
         let mvp: Matrix4<f32> = self.camera.get_mvp();
         self.sr.set_mvp(mvp);
+        self.pr_texture.set_mvp(mvp);
 
         // unproject mouse position to
         if let Some(pos) = pos {
             self.last_mouse_pos = self.camera.unproject(pos);
         }
 
+        // if there is a new texture to use, load it
+        if let Texture::New(image) = &self.texture {
+            // TODO: destroy the old one using opengl to avoid memory leaks!
+
+            let image_buffer = image.to_rgba8();
+            let pixels = image_buffer.as_flat_samples();
+
+            let texture_id = self.pr_texture.create_texture(
+                gl,
+                &pixels.as_slice(),
+                image.width(),
+                image.height(),
+            );
+
+            log::info!("Generated with Texture ID ");
+
+            self.texture = Texture::Existing(texture_id);
+        }
+
+        // TODO: draw image and shapes with opacity
+
         // do the actual drawing of already cached vertices
+        if let Texture::Existing(texture_id) = &self.texture {
+            self.pr_texture.flush(gl, texture_id);
+        }
         self.sr.flush(gl);
     }
 }

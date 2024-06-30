@@ -1,15 +1,9 @@
+use crate::primitiverenderer::{Color, DrawCall, PrimitiveType};
+
 use super::{gl, shader};
 use eframe::glow;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PrimitiveType {
-    Point = glow::POINTS,
-    Line = glow::LINES,
-    Filled = glow::TRIANGLES,
-}
-
-pub struct PrimitiveRenderer {
+pub struct PrimitiveRendererTexture {
     program: shader::Program,
     vertex_array: gl::VertexArray,
     vertex_buffer: gl::VertexBuffer,
@@ -21,13 +15,6 @@ pub struct PrimitiveRenderer {
     index: usize,
     active_drawcall: Option<DrawCall>,
     draw_calls: Vec<DrawCall>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct DrawCall {
-    pub(crate) pt: PrimitiveType,
-    pub(crate) start_index: usize,
-    pub(crate) vertex_count: usize,
 }
 
 /* /// Test for using a "RenderGuard" to make sure state of the renderer is correctly managed
@@ -117,7 +104,11 @@ impl<T: Vertex3C> Vertex2C for T {
     }
 }
 
-impl PrimitiveRenderer {
+pub struct RenderTexture {
+    id: <eframe::glow::Context as glow::HasContext>::Texture,
+}
+
+impl PrimitiveRendererTexture {
     pub fn new(gl: &glow::Context, max_vertices: u32) -> Self {
         //load our shader
         let shader = shader::Program::new(
@@ -125,15 +116,19 @@ impl PrimitiveRenderer {
             r#"
             layout(location = 0) in vec4 position;
             layout(location = 1) in vec4 color;
+            layout(location = 2) in vec2 aTexCoord;
             
             uniform mat4 u_projModelView;
             
             out vec4 v_Color;
+            out vec2 TexCoord;
+
             void main(){
                 // output the final vertex position
                 gl_Position = u_projModelView * position;
                     
                 v_Color = vec4(color.xyz, 1.0);
+                TexCoord = aTexCoord;
             }
         "#,
             r#"
@@ -141,8 +136,13 @@ impl PrimitiveRenderer {
             layout(location = 0) out vec4 color;
     
             in vec4 v_Color;
+            in vec2 TexCoord;
+
+            uniform sampler2D ourTexture;
+
             void main(){
-                color = v_Color;
+                color = texture(ourTexture, TexCoord) * v_Color;
+                // color = v_Color;
             }
             "#,
         );
@@ -153,12 +153,13 @@ impl PrimitiveRenderer {
         let mut layout = gl::VertexBufferLayout::new();
         layout.push(gl::GLType::Float, 3);
         layout.push(gl::GLType::UnsignedByte, 4);
+        layout.push(gl::GLType::Float, 2);
         let layout = layout;
 
         let mut vb = gl::VertexBuffer::new(gl);
 
-        // allocate storage for our vertices (3 position + 1 color) floats
-        let vertices = vec![0f32; max_vertices as usize * 4];
+        // allocate storage for our vertices (3 position + 1 color + 2 texture coord) floats
+        let vertices = vec![0f32; max_vertices as usize * (4 + 2)];
 
         // create vertex array and combine our vertex buffer with the layout
         let mut va = gl::VertexArray::new(gl);
@@ -195,22 +196,6 @@ impl PrimitiveRenderer {
         });
     }
 
-    /*
-    pub fn begin2(&mut self, primitive_type: PrimitiveType) -> RenderGuard<'_> {
-        // todo: remove me later
-        self.active_drawcall = Some(DrawCall {
-            pt: primitive_type,
-            start_index: self.vertex_count,
-            vertex_count: 0,
-        });
-
-        RenderGuard {
-            start_index: self.vertex_count,
-            pr: self,
-            pt: primitive_type,
-        }
-    }*/
-
     pub fn end(&mut self) {
         // mark the current position in the buffer
         if let Some(mut dc) = self.active_drawcall {
@@ -223,9 +208,51 @@ impl PrimitiveRenderer {
         self.active_drawcall = None;
     }
 
+    pub fn create_texture(
+        &self,
+        gl: &glow::Context,
+        image_data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> RenderTexture {
+        use glow::HasContext as _;
+
+        unsafe {
+            let texture_id = gl.create_texture().expect("cannot create texture");
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture_id));
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::LINEAR as i32,
+            );
+
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as i32,
+                width as i32,
+                height as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                Some(image_data),
+            );
+            eframe::egui_glow::check_for_gl_error!(&gl, "tex_image_2d");
+
+            RenderTexture { id: texture_id }
+        }
+    }
+
     // TODO: add function for ensuring space for X more vertices. That could actually take in the GL context and perform a `draw` if necessary...
 
-    pub fn flush(&mut self, gl: &glow::Context) {
+    pub fn flush(&mut self, gl: &glow::Context, texture: &RenderTexture) {
         use glow::HasContext as _;
 
         assert!(
@@ -241,10 +268,17 @@ impl PrimitiveRenderer {
         //     self.vertices.capacity(),
         //     (self.vertices.capacity() * std::mem::size_of::<f32>()) / 1024 / 1024
         // );
+
         // use the shader
         self.program.bind(gl);
         self.program
             .set_uniform_matrix_4_f32(gl, "u_projModelView", self.proj_model_view);
+
+        // bind the texture
+        unsafe {
+            // gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
+        }
 
         // upload all our data
         self.vertex_buffer.bind(gl);
@@ -257,6 +291,7 @@ impl PrimitiveRenderer {
         // TODO: go through and "optimize" the drawcalls if possible, i.e. by combining "adjacent" calls with the same primitive type
 
         for dc in self.draw_calls.iter() {
+            // !("Drawing {} vertices", dc.vertex_count);
             unsafe {
                 gl.draw_arrays(dc.pt as u32, dc.start_index as i32, dc.vertex_count as i32);
             }
@@ -275,8 +310,8 @@ impl PrimitiveRenderer {
     }
 }
 
-impl Vertex3C for PrimitiveRenderer {
-    fn xyzc(&mut self, x: f32, y: f32, z: f32, color: Color) {
+impl PrimitiveRendererTexture {
+    pub fn xyzc(&mut self, x: f32, y: f32, z: f32, color: Color, texture_x: f32, texture_y: f32) {
         assert!(
             self.active_drawcall.is_some(),
             "must call begin() before vertex"
@@ -294,65 +329,11 @@ impl Vertex3C for PrimitiveRenderer {
             *self.vertices.get_unchecked_mut(self.index + 1) = y;
             *self.vertices.get_unchecked_mut(self.index + 2) = z;
             *self.vertices.get_unchecked_mut(self.index + 3) = color.bits;
+            *self.vertices.get_unchecked_mut(self.index + 4) = texture_x;
+            *self.vertices.get_unchecked_mut(self.index + 5) = texture_y;
         }
-        // self.vertices[self.index + 0] = x;
-        // self.vertices[self.index + 1] = y;
-        // self.vertices[self.index + 2] = z;
-        // self.vertices[self.index + 3] = color.bits;
 
-        self.index += 4; // 3 position + 1 u32 for color
+        self.index += 4+2; // 3 position + 1 u32 for color + 2 for texture coord
         self.vertex_count += 1;
-    }
-}
-
-/// An RGBA color.
-/// Internally, the color is packed into 4 bytes, one for each of RGBA, instead of as 4 floats to save memory
-#[derive(Clone, Copy)]
-pub struct Color {
-    pub(crate) bits: f32,
-}
-
-impl Color {
-    pub const BLACK: Color = Color::rgba_u8(0x00, 0x00, 0x00, 0xff);
-    pub const WHITE: Color = Color::rgba_u8(0xff, 0xff, 0xff, 0xff);
-    pub const RED: Color = Color::rgba_u8(0xff, 0x00, 0x00, 0xff);
-    pub const GREEN: Color = Color::rgba_u8(0x00, 0xff, 0x00, 0xff);
-    pub const BLUE: Color = Color::rgba_u8(0x00, 0x00, 0xff, 0xff);
-
-    pub fn rgb(r: f32, g: f32, b: f32) -> Self {
-        Self::rgba(r, g, b, 1.0)
-    }
-    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self::rgba_u8(
-            (255.0 * r) as u8,
-            (255.0 * g) as u8,
-            (255.0 * b) as u8,
-            (255.0 * a) as u8,
-        )
-    }
-
-    pub const fn rgba_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
-        let colori = ((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32);
-
-        // bits: f32::from_bits(colori), // (not const yet...)
-        Self {
-            bits: unsafe { core::mem::transmute::<u32, f32>(colori) },
-        }
-    }
-
-    pub fn grayscale(gray: f32) -> Self {
-        Self::rgb(gray, gray, gray)
-    }
-}
-
-impl From<[f32; 3]> for Color {
-    fn from(value: [f32; 3]) -> Self {
-        Color::rgb(value[0], value[1], value[2])
-    }
-}
-
-impl From<[f32; 4]> for Color {
-    fn from(value: [f32; 4]) -> Self {
-        Color::rgba(value[0], value[1], value[2], value[3])
     }
 }
