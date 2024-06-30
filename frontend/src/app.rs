@@ -17,6 +17,7 @@ pub struct App {
 
     state: State,
     background: Option<DynamicImage>,
+    output_cell: String,
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -68,12 +69,58 @@ impl App {
             state,
             world_renderer: Arc::new(Mutex::new(WorldRenderer::new(gl))),
             background: None,
+            output_cell: Default::default(),
         }
     }
 
     fn set_background(&mut self, image_data: &[u8]) {
         let image = image::load_from_memory(image_data).unwrap();
         self.background = Some(image);
+    }
+
+    fn draw_neighbors(&self, point: &Point, sr: &mut ShapeRenderer, color: Color) {
+        if !self.state.map.is_valid(*point) {
+            return;
+        }
+
+        sr.begin(graphics::primitiverenderer::PrimitiveType::Line);
+        for (neighbor, _) in self.state.map.neighbors_of(*point) {
+            sr.line(
+                point.col as f32 + 0.5,
+                point.row as f32 + 0.5,
+                neighbor.col as f32 + 0.5,
+                neighbor.row as f32 + 0.5,
+                color,
+            );
+        }
+        sr.end();
+
+        sr.begin(graphics::primitiverenderer::PrimitiveType::Filled);
+        let padding = 0.3;
+        for (neighbor, _) in self.state.map.neighbors_of(*point) {
+            sr.rect(
+                neighbor.col as f32 + padding,
+                neighbor.row as f32 + padding,
+                1.0 - 2.0 * padding,
+                1.0 - 2.0 * padding,
+                color,
+            );
+        }
+        sr.end();
+    }
+    fn mouse_world_to_point_valid(&self, x: f32, y: f32) -> Option<Point> {
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        let point = Point {
+            row: y as usize,
+            col: x as usize,
+        };
+        if self.state.map.is_valid(point) {
+            Some(point)
+        } else {
+            None
+        }
     }
 }
 fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::ImageError> {
@@ -116,7 +163,10 @@ impl eframe::App for App {
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
+
+            let mouse_pos = self.world_renderer.lock().last_mouse_pos;
+            ui.label(format!("Mouse: [{:.2}, {:.2}]", mouse_pos.x, mouse_pos.y));
+            ui.label(&self.output_cell);
 
             if ui.button("Load Preset").clicked() {
                 self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
@@ -184,23 +234,45 @@ impl eframe::App for App {
                         world.sr.rect(col as f32, row as f32, 1.0, 1.0, color);
                     }
                 }
-                if let Some(goal) = self.state.goal {
+                // mark start and goal cells
+                if let Some(goal) = &self.state.goal {
                     world
                         .sr
                         .rect(goal.col as f32, goal.row as f32, 1.0, 1.0, Color::RED);
                 }
 
-                if let Some(start) = self.state.start {
+                if let Some(start) = &self.state.start {
                     world
                         .sr
                         .rect(start.col as f32, start.row as f32, 1.0, 1.0, Color::GREEN);
                 }
-                world.sr.end();
 
-                if self.state.draw_grid_lines {
+                world.sr.end();
+                // get the cell the user is hovering over
+                if let Some(point) =
+                    self.mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
+                {
                     world
                         .sr
                         .begin(graphics::primitiverenderer::PrimitiveType::Filled);
+                    world
+                        .sr
+                        .rect(point.col as f32, point.row as f32, 1.0, 1.0, Color::GREEN);
+                    world.sr.end();
+                    self.output_cell = format!(
+                        "Cell @{}:{}\n{:#?}\n\n", //{:#?}",
+                        point.row,
+                        point.col,
+                        self.state.map.cells[point.row][point.col], // v
+                    );
+
+                    // draw lines to the neighbors of the currently hovered cell
+                    self.draw_neighbors(&point, &mut world.sr, Color::GREEN);
+                }
+                if self.state.draw_grid_lines {
+                    world
+                        .sr
+                        .begin(graphics::primitiverenderer::PrimitiveType::Line);
                     for row in 0..=self.state.map.rows {
                         world.sr.line(
                             0.0,
