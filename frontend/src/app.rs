@@ -189,7 +189,6 @@ impl eframe::App for App {
 
             let mouse_pos = self.world_renderer.lock().last_mouse_pos;
             ui.label(format!("Mouse: [{:.2}, {:.2}]", mouse_pos.x, mouse_pos.y));
-            ui.label(&self.output_cell);
 
             if ui.button("Load Preset").clicked() {
                 self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
@@ -256,6 +255,7 @@ impl eframe::App for App {
                     pathfinder.step(&self.state.map);
                     ctx.request_repaint_after(Duration::from_millis(20));
                 }
+                ui.label(&self.output_cell);
             }
 
             ui.label(&self.output_pathfinder);
@@ -318,12 +318,6 @@ impl eframe::App for App {
                         .sr
                         .rect(point.col as f32, point.row as f32, 1.0, 1.0, Color::GREEN);
                     world.sr.end();
-                    self.output_cell = format!(
-                        "Cell @{}:{}\n{:#?}\n\n", //{:#?}",
-                        point.row,
-                        point.col,
-                        self.state.map.cells[point.row][point.col], // v
-                    );
 
                     // draw lines to the neighbors of the currently hovered cell
                     self.draw_neighbors(&point, &mut world.sr, Color::GREEN);
@@ -406,20 +400,16 @@ impl eframe::App for App {
                         }
                     }
 
-                    // // get the cell the user is hovering
-                    // if let Some((x, y)) = context.input(|input| input.current_mouse_position()) {
-                    //     if let Some(point) = self.mouse_to_world_point_valid(x, y) {
-                    //         ctx.set_fill_style(&"#00FF00".into());
-                    //         ctx.fill_rect(point.col as f64, point.row as f64, 1.0, 1.0);
-                    //
-                    //         let v = visited.get(point);
-                    //
-                    //         context.set_output(&format!(
-                    //             "Cell @{}:{}\n{:#?}\n\n{:#?}",
-                    //             point.row, point.col, self.map.cells[point.row][point.col], v
-                    //         ));
-                    //     }
-                    // }
+                    // get the cell the user is hovering
+                    if let Some(point) = self
+                        .mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
+                    {
+                        let v = visited.get(point);
+                        self.output_cell = format!(
+                            "Cell @{}:{}\n{:#?}\n\n{:#?}",
+                            point.row, point.col, self.state.map.cells[point.row][point.col], v
+                        );
+                    }
                 }
 
                 if self.state.draw_grid_lines {
