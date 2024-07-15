@@ -747,9 +747,14 @@ impl eframe::App for App {
             });
             let modifiers = ui.input(|r| r.modifiers);
 
-            if self.mouse_select_state.is_some() && ui.ui_contains_pointer() && mouse_clicked {
-                if let Some(callback) = self.mouse_select_state.take() {
-                    callback(self, last_mouse_pos);
+            if self.mouse_select_state.is_some() {
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.mouse_select_state = None;
+                }
+                if ui.ui_contains_pointer() && mouse_clicked {
+                    if let Some(callback) = self.mouse_select_state.take() {
+                        callback(self, last_mouse_pos);
+                    }
                 }
             }
 
