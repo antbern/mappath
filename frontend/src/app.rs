@@ -10,7 +10,7 @@ use graphics::{
     shaperenderer::ShapeRenderer,
 };
 use image::DynamicImage;
-use nalgebra::{Matrix4, Point2};
+use nalgebra::Point2;
 use optimize::{
     find::{MapStorage, MapTrait, PathFinder, PathFinderState, Visited},
     grid::{Cell, Direction, GridMap, Point},
@@ -64,6 +64,9 @@ struct State {
     // stuff for selecting rectangles
     selection_start: Option<Reference>,
     selection_end: Option<Reference>,
+
+    // store whatever the cameare was looking at
+    last_camera_position: Option<(nalgebra::Vector2<f32>, f32)>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -87,6 +90,7 @@ impl Default for State {
             edit_selection: None,
             selection_start: None,
             selection_end: None,
+            last_camera_position: None,
         }
     }
 }
@@ -116,9 +120,17 @@ impl App {
             .gl
             .as_ref()
             .expect("You need to run eframe with the glow backend");
+
+        let mut world_renderer = WorldRenderer::new(gl);
+
+        if let Some((pos, zoom)) = state.last_camera_position {
+            world_renderer.camera.set_position(pos);
+            world_renderer.camera.set_zoom(zoom);
+        }
+
         App {
             state,
-            world_renderer: Arc::new(Mutex::new(WorldRenderer::new(gl))),
+            world_renderer: Arc::new(Mutex::new(world_renderer)),
             background: None,
             output_cell: Default::default(),
             pathfinder: None,
@@ -295,7 +307,7 @@ impl eframe::App for App {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
-            });
+            })
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
@@ -303,6 +315,10 @@ impl eframe::App for App {
             // Explicit scope for MutexGuard lifetime.
             {
                 let mut world = self.world_renderer.lock();
+
+                // store the last camera position for the next time the page is reloaded
+                self.state.last_camera_position =
+                    Some((world.camera.get_position().clone(), world.camera.get_zoom()));
 
                 // draws the background image
                 if let Some(background) = &self.background {
@@ -728,7 +744,7 @@ impl WorldRenderer {
         self.camera.update();
 
         // set the correct MVP matrix for the shape renderer
-        let mvp: Matrix4<f32> = self.camera.get_mvp();
+        let mvp = self.camera.get_mvp();
         self.sr.set_mvp(mvp);
         self.pr_texture.set_mvp(mvp);
 

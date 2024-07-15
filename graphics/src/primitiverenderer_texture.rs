@@ -179,8 +179,8 @@ impl PrimitiveRendererTexture {
         }
     }
 
-    pub fn set_mvp(&mut self, mvp: nalgebra::Matrix4<f32>) {
-        self.proj_model_view = mvp;
+    pub fn set_mvp(&mut self, mvp: &nalgebra::Matrix4<f32>) {
+        self.proj_model_view.copy_from(mvp);
     }
 
     pub fn begin(&mut self, primitive_type: PrimitiveType) {

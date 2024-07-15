@@ -10,7 +10,7 @@ members = [
 default-members = ["frontend"]
 
 [workspace.dependencies]
-nalgebra = "0.33"
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
 
 eframe = { version = "0.28", default-features = false, features = [
     # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.

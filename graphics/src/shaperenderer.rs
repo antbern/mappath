@@ -22,7 +22,7 @@ impl ShapeRenderer {
         }
     }
 
-    pub fn set_mvp(&mut self, mvp: nalgebra::Matrix4<f32>) {
+    pub fn set_mvp(&mut self, mvp: &nalgebra::Matrix4<f32>) {
         self.pr.set_mvp(mvp);
     }
 

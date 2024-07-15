@@ -126,8 +126,26 @@ impl Camera {
         self.combined = projection.as_matrix() * view.to_homogeneous();
     }
 
-    pub fn get_mvp(&self) -> Matrix4<f32> {
-        self.combined
+    pub fn get_mvp(&self) -> &Matrix4<f32> {
+        &self.combined
+    }
+
+    pub fn get_position(&self) -> &Vector2<f32> {
+        &self.position
+    }
+
+    pub fn set_position(&mut self, position: Vector2<f32>) {
+        self.position = position;
+        self.has_changed = true;
+    }
+
+    pub fn get_zoom(&self) -> f32 {
+        self.zoom
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom;
+        self.has_changed = true;
     }
 }
 
