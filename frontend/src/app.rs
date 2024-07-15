@@ -64,6 +64,8 @@ struct State {
 
     // store whatever the cameare was looking at
     last_camera_position: Option<(nalgebra::Vector2<f32>, f32)>,
+
+    background_alpha: f32,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -103,6 +105,7 @@ impl Default for State {
                 pixels_per_cell: 1,
             },
             last_camera_position: None,
+            background_alpha: 1.0,
         }
     }
 }
@@ -458,6 +461,10 @@ impl eframe::App for App {
             }
             ui.checkbox(&mut self.state.draw_grid_lines, "Draw grid lines");
             ui.checkbox(&mut self.state.draw_pathfind_debug, "Draw Pathfind Debug");
+            ui.add(
+                egui::widgets::Slider::new(&mut self.state.background_alpha, 0.0..=1.0)
+                    .text("Background Alpha"),
+            );
 
             if let Some(pathfinder) = &mut self.pathfinder {
                 ui.label("Pathfinder");
@@ -521,7 +528,7 @@ impl eframe::App for App {
                     let y = 0.0;
                     let width = background.image_data.width() as f32 * background.scale;
                     let height = background.image_data.height() as f32 * background.scale;
-                    let color = Color::WHITE;
+                    let color = Color::rgba(1.0, 1.0, 1.0, self.state.background_alpha);
 
                     // add the vertices for the image quad, and flip the y axis so that the image is correctly drawn
                     world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 1.0);
