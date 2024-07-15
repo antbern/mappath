@@ -272,12 +272,7 @@ impl eframe::App for App {
             }
 
             ui.label(&self.output_pathfinder);
-            // if let Some(background) = &self.background {
-            //     ui.image((
-            //         background.texture_handle.id(),
-            //         background.texture_handle.size_vec2(),
-            //     ));
-            // }
+            ui.label("In path finding mode: Click to select start, Shift-Click to select goal.");
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
@@ -287,7 +282,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            // Let all nodes do their drawing. Explicit scope for MutexGuard lifetime.
+            // Explicit scope for MutexGuard lifetime.
             {
                 let mut world = self.world_renderer.lock();
 
@@ -321,34 +316,10 @@ impl eframe::App for App {
                     world.pr_texture.xyzc(x, y + height, 0.0, color, 0.0, 1.0);
                     world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 0.0);
 
-                    // world.pr_texture.xyzc(0.0, 0.0, 0.0, Color::WHITE, 0.0, 0.0);
-                    // world.pr_texture.xyzc(
-                    //     background.image_data.width() as f32 * background.scale,
-                    //     0.0,
-                    //     0.0,
-                    //     Color::WHITE,
-                    //     1.0,
-                    //     0.0,
-                    // );
-                    // world.pr_texture.xyzc(
-                    //     background.image_data.width() as f32 * background.scale,
-                    //     background.image_data.height() as f32 * background.scale,
-                    //     0.0,
-                    //     Color::WHITE,
-                    //     1.0,
-                    //     1.0,
-                    // );
-                    // world.pr_texture.xyzc(
-                    //     0.0,
-                    //     background.image_data.height() as f32 * background.scale,
-                    //     0.0,
-                    //     Color::WHITE,
-                    //     0.0,
-                    //     1.0,
-                    // );
                     world.pr_texture.end();
                 }
 
+                // draw the grid
                 world
                     .sr
                     .begin(graphics::primitiverenderer::PrimitiveType::Filled);
@@ -400,6 +371,7 @@ impl eframe::App for App {
                     self.draw_neighbors(&point, &mut world.sr, Color::GREEN);
                 }
 
+                // draw the pathfinder debug information
                 if let Some(pathfinder) = &self.pathfinder {
                     let visited = pathfinder.get_visited();
 
@@ -513,6 +485,39 @@ impl eframe::App for App {
                     }
 
                     world.sr.end();
+                }
+
+                // do logic based on mouse input
+                let mouse_clicked = ui.input(|r| r.pointer.primary_clicked());
+                let modifiers = ui.input(|r| r.modifiers);
+
+                let mut start_goal_changed = false;
+                if let Some(point) =
+                    self.mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
+                {
+                    if mouse_clicked && !modifiers.shift {
+                        self.state.start = Some(point);
+                        start_goal_changed = true;
+                    } else if mouse_clicked && modifiers.shift {
+                        self.state.goal = Some(point);
+                        start_goal_changed = true;
+                    }
+                }
+
+                // need to reinitialize the pathfinder if the start or goal has changed
+                if start_goal_changed {
+                    if let (Some(start), Some(goal)) = (self.state.start, self.state.goal) {
+                        let finder = PathFinder::new(
+                            start,
+                            goal,
+                            self.state.map.create_storage::<Visited<usize, Point>>(),
+                            (),
+                        );
+
+                        self.pathfinder = Some(finder);
+                    } else {
+                        self.pathfinder = None;
+                    }
                 }
             }
 
