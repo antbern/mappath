@@ -9,7 +9,7 @@ use graphics::{
     primitiverenderer_texture::{PrimitiveRendererTexture, RenderTexture},
     shaperenderer::ShapeRenderer,
 };
-use image::DynamicImage;
+use image::{DynamicImage, GenericImageView};
 use nalgebra::Point2;
 use optimize::{
     find::{MapStorage, MapTrait, PathFinder, PathFinderState, Visited},
@@ -41,6 +41,7 @@ pub struct App {
             GridMap<usize>,
         >,
     >,
+    mouse_select_state: Option<Box<dyn FnOnce(&mut Self, nalgebra::Point2<f32>)>>,
 }
 
 type CmpCtx = ();
@@ -147,6 +148,7 @@ impl App {
             output_cell: Default::default(),
             pathfinder: None,
             output_pathfinder: Default::default(),
+            mouse_select_state: None,
         }
     }
 
@@ -158,7 +160,7 @@ impl App {
         self.background = Some(Background {
             image_data: image,
             file_name,
-            scale: 2.0,
+            scale: 1.0,
         });
     }
     fn set_background_image(&mut self, image: DynamicImage, file_name: String) {
@@ -167,7 +169,7 @@ impl App {
         self.background = Some(Background {
             image_data: image,
             file_name,
-            scale: 2.0,
+            scale: 1.0,
         });
     }
 
@@ -382,15 +384,43 @@ impl eframe::App for App {
                 ui.separator();
                 ui.label("Step 3: Edit Cells");
 
-                let mut changed = false;
-                if let Some(b) = &mut self.background {
-                    if ui.button("Auto Fill Map").clicked() {
-                        // TODO
-                    }
+                if ui
+                    .add_enabled(
+                        self.background.is_some(),
+                        egui::widgets::Button::new("Auto Fill Map"),
+                    )
+                    .clicked()
+                {
+                    self.mouse_select_state = Some(Box::new(|s, p| {
+                        if let Some(background) = &s.background {
+                            // get the pixel at the center of that cell
+                            let x = (p.x / background.scale) as u32;
+                            let y = (p.y / background.scale) as u32;
+
+                            let (width, height) = background.image_data.dimensions();
+                            if x < width && y < height {
+                                let color = background.image_data.get_pixel(x, y);
+                                log::info!("Selected color: {:?}", color);
+
+                                // generate a map based on the selected color
+                                fill_map_from_image(
+                                    &mut s.state.map,
+                                    &background.image_data,
+                                    background.scale as f64,
+                                    &color,
+                                );
+                            } else {
+                                log::info!("Selected color is out of bounds");
+                            }
+
+                            s.on_map_change();
+                        }
+                    }));
                 }
-                if changed {
-                    self.on_map_change();
-                }
+
+                // TODO: cell editing here
+
+                ui.separator();
             }
 
             if ui.button("Load Preset").clicked() {
@@ -475,7 +505,7 @@ impl eframe::App for App {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
             // Explicit scope for MutexGuard lifetime.
-            {
+            let last_mouse_pos = {
                 let mut world = self.world_renderer.lock();
 
                 // store the last camera position for the next time the page is reloaded
@@ -493,13 +523,6 @@ impl eframe::App for App {
                     let height = background.image_data.height() as f32 * background.scale;
                     let color = Color::WHITE;
 
-                    log::info!(
-                        "Drawing background image: {}x{} at {}:{}",
-                        width,
-                        height,
-                        x,
-                        y
-                    );
                     // add the vertices for the image quad, and flip the y axis so that the image is correctly drawn
                     world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 1.0);
                     world.pr_texture.xyzc(x + width, y, 0.0, color, 1.0, 1.0);
@@ -566,6 +589,20 @@ impl eframe::App for App {
                 }
 
                 world.sr.end();
+
+                if self.state.is_editing && self.mouse_select_state.is_some() {
+                    world
+                        .sr
+                        .begin(graphics::primitiverenderer::PrimitiveType::Line);
+                    let color = Color::rgba_u8(255, 0, 0, 255);
+                    let x = world.last_mouse_pos.x;
+                    let y = world.last_mouse_pos.y;
+                    let width = 10.0;
+                    world.sr.line(x - width, y, x + width, y, color);
+                    world.sr.line(x, y - width, x, y + width, color);
+                    world.sr.end();
+                }
+
                 // get the cell the user is hovering over
                 if let Some(point) =
                     self.mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
@@ -697,85 +734,90 @@ impl eframe::App for App {
 
                     world.sr.end();
                 }
+                world.last_mouse_pos
+            };
+            // do logic based on mouse input
+            let (mouse_clicked, mouse_pressed, mouse_down, mouse_released) = ui.input(|r| {
+                (
+                    r.pointer.primary_clicked(),
+                    r.pointer.primary_pressed(),
+                    r.pointer.primary_down(),
+                    r.pointer.primary_released(),
+                )
+            });
+            let modifiers = ui.input(|r| r.modifiers);
 
-                // do logic based on mouse input
-                let (mouse_clicked, mouse_pressed, mouse_down, mouse_released) = ui.input(|r| {
-                    (
-                        r.pointer.primary_clicked(),
-                        r.pointer.primary_pressed(),
-                        r.pointer.primary_down(),
-                        r.pointer.primary_released(),
-                    )
-                });
-                let modifiers = ui.input(|r| r.modifiers);
+            if self.mouse_select_state.is_some() && ui.ui_contains_pointer() && mouse_clicked {
+                if let Some(callback) = self.mouse_select_state.take() {
+                    callback(self, last_mouse_pos);
+                }
+            }
 
-                let mut start_goal_changed = false;
-                if let Some(point) =
-                    self.mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
-                {
-                    if !self.state.is_editing {
-                        if mouse_clicked && !modifiers.shift {
-                            self.state.start = Some(point);
-                            start_goal_changed = true;
-                        } else if mouse_clicked && modifiers.shift {
-                            self.state.goal = Some(point);
-                            start_goal_changed = true;
+            let mut start_goal_changed = false;
+            if let Some(point) = self.mouse_world_to_point_valid(last_mouse_pos.x, last_mouse_pos.y)
+            {
+                if !self.state.is_editing {
+                    if mouse_clicked && !modifiers.shift {
+                        self.state.start = Some(point);
+                        start_goal_changed = true;
+                    } else if mouse_clicked && modifiers.shift {
+                        self.state.goal = Some(point);
+                        start_goal_changed = true;
+                    }
+                } else if !modifiers.shift {
+                    if mouse_clicked && self.mouse_select_state.is_some() {
+                    } else if mouse_pressed {
+                        // initialize region selection
+                        self.state.edit_state.selection_start = Some(point);
+                        self.state.edit_state.selection_end = Some(point);
+                        self.state.edit_state.edit_selection = Some(Selection {
+                            start: point,
+                            end: point,
+                        });
+                    } else if mouse_released {
+                        self.state.edit_state.selection_start = None;
+                        self.state.edit_state.selection_end = None;
+
+                        if let Some(selection) = &self.state.edit_state.edit_selection {
+                            // TODO: load values from the selection here into the editor
+                            let cell =
+                                self.state.map.cells[selection.start.row][selection.start.col];
+                            log::debug!("Selected region first cell: {:#?}", cell);
                         }
-                    } else if !modifiers.shift {
-                        if mouse_pressed {
-                            // initialize region selection
-                            self.state.edit_state.selection_start = Some(point);
+                    } else if mouse_down {
+                        // update region selection
+                        if let Some(start) = self.state.edit_state.selection_start {
                             self.state.edit_state.selection_end = Some(point);
-                            self.state.edit_state.edit_selection = Some(Selection {
-                                start: point,
-                                end: point,
-                            });
-                        } else if mouse_released {
-                            self.state.edit_state.selection_start = None;
-                            self.state.edit_state.selection_end = None;
+                            let (start, end) = (
+                                Point {
+                                    row: start.row.min(point.row),
+                                    col: start.col.min(point.col),
+                                },
+                                Point {
+                                    row: start.row.max(point.row),
+                                    col: start.col.max(point.col),
+                                },
+                            );
 
-                            if let Some(selection) = &self.state.edit_state.edit_selection {
-                                // TODO: load values from the selection here into the editor
-                                let cell =
-                                    self.state.map.cells[selection.start.row][selection.start.col];
-                                log::debug!("Selected region first cell: {:#?}", cell);
-                            }
-                        } else if mouse_down {
-                            // update region selection
-                            if let Some(start) = self.state.edit_state.selection_start {
-                                self.state.edit_state.selection_end = Some(point);
-                                let (start, end) = (
-                                    Point {
-                                        row: start.row.min(point.row),
-                                        col: start.col.min(point.col),
-                                    },
-                                    Point {
-                                        row: start.row.max(point.row),
-                                        col: start.col.max(point.col),
-                                    },
-                                );
-
-                                self.state.edit_state.edit_selection =
-                                    Some(Selection { start, end });
-                            }
+                            self.state.edit_state.edit_selection = Some(Selection { start, end });
                         }
                     }
                 }
+            }
 
-                // need to reinitialize the pathfinder if the start or goal has changed
-                if start_goal_changed {
-                    if let (Some(start), Some(goal)) = (self.state.start, self.state.goal) {
-                        let finder = PathFinder::new(
-                            start,
-                            goal,
-                            self.state.map.create_storage::<Visited<usize, Point>>(),
-                            (),
-                        );
+            // need to reinitialize the pathfinder if the start or goal has changed
+            if start_goal_changed {
+                if let (Some(start), Some(goal)) = (self.state.start, self.state.goal) {
+                    let finder = PathFinder::new(
+                        start,
+                        goal,
+                        self.state.map.create_storage::<Visited<usize, Point>>(),
+                        (),
+                    );
 
-                        self.pathfinder = Some(finder);
-                    } else {
-                        self.pathfinder = None;
-                    }
+                    self.pathfinder = Some(finder);
+                } else {
+                    self.pathfinder = None;
                 }
             }
 
@@ -948,4 +990,43 @@ impl WorldRenderer {
         }
         self.sr.flush(gl);
     }
+}
+
+/// Fills a map based on the pixels on an image and a selected color for valid cells
+fn fill_map_from_image(
+    map: &mut GridMap<usize>,
+    image: &DynamicImage,
+    image_scale: f64,
+    color: &image::Rgba<u8>,
+) {
+    let image_height = image.height();
+    for row in 0..map.rows {
+        for col in 0..map.columns {
+            // find the pixel at the center of the cell
+            let (x, y) = (col as f64 + 0.5, row as f64 + 0.5);
+            let (x, y) = (x / image_scale, y / image_scale);
+            let (x, y) = (x as u32, image_height - y as u32 - 1);
+            let pixel = image.get_pixel(x, y);
+
+            let diff = pixel_difference_norm(&pixel, color);
+
+            if diff < 10.0 {
+                map.cells[row][col] = Cell::Valid { cost: 1 };
+            } else {
+                map.cells[row][col] = Cell::Invalid;
+            }
+        }
+    }
+}
+
+fn pixel_difference_norm(a: &image::Rgba<u8>, b: &image::Rgba<u8>) -> f64 {
+    let a = a.0;
+    let b = b.0;
+    let diff = [
+        (a[0] as f64 - b[0] as f64).abs(),
+        (a[1] as f64 - b[1] as f64).abs(),
+        (a[2] as f64 - b[2] as f64).abs(),
+    ];
+    let diff = (diff[0].powi(2) + diff[1].powi(2) + diff[2].powi(2)).sqrt();
+    diff
 }
