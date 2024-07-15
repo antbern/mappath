@@ -59,14 +59,22 @@ struct State {
     goal: Option<Point>,
     auto_step: bool,
 
+    edit_state: EditState,
+
+    // store whatever the cameare was looking at
+    last_camera_position: Option<(nalgebra::Vector2<f32>, f32)>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct EditState {
     edit_selection: Option<Selection<Reference>>,
 
     // stuff for selecting rectangles
     selection_start: Option<Reference>,
     selection_end: Option<Reference>,
 
-    // store whatever the cameare was looking at
-    last_camera_position: Option<(nalgebra::Vector2<f32>, f32)>,
+    /// The number of pixels per cell in the image, used for auto-detecting the grid size
+    pixels_per_cell: usize,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -87,9 +95,12 @@ impl Default for State {
             start: None,
             goal: None,
             auto_step: true,
-            edit_selection: None,
-            selection_start: None,
-            selection_end: None,
+            edit_state: EditState {
+                edit_selection: None,
+                selection_start: None,
+                selection_end: None,
+                pixels_per_cell: 1,
+            },
             last_camera_position: None,
         }
     }
@@ -99,6 +110,7 @@ struct Background {
     image_data: DynamicImage,
     // image: ColorImage,
     // texture_handle: egui::TextureHandle,
+    file_name: String,
     scale: f32,
 }
 
@@ -138,21 +150,23 @@ impl App {
         }
     }
 
-    fn set_background(&mut self, image_data: &[u8]) {
+    fn set_background(&mut self, image_data: &[u8], file_name: String) {
         let image = image::load_from_memory(image_data).unwrap();
 
         self.world_renderer.lock().texture = Texture::New(image.clone());
 
         self.background = Some(Background {
             image_data: image,
+            file_name,
             scale: 2.0,
         });
     }
-    fn set_background_image(&mut self, image: DynamicImage) {
+    fn set_background_image(&mut self, image: DynamicImage, file_name: String) {
         self.world_renderer.lock().texture = Texture::New(image.clone());
 
         self.background = Some(Background {
             image_data: image,
+            file_name,
             scale: 2.0,
         });
     }
@@ -200,6 +214,35 @@ impl App {
             Some(point)
         } else {
             None
+        }
+    }
+    fn on_map_change(&mut self) {
+        // make sure all selections etc are within bounds
+        if let Some(selection) = &mut self.state.edit_state.edit_selection {
+            selection.start.row = selection.start.row.min(self.state.map.rows - 1);
+            selection.start.col = selection.start.col.min(self.state.map.columns - 1);
+            selection.end.row = selection.end.row.min(self.state.map.rows - 1);
+            selection.end.col = selection.end.col.min(self.state.map.columns - 1);
+        }
+
+        if let Some(start) = &mut self.state.start {
+            start.row = start.row.min(self.state.map.rows - 1);
+            start.col = start.col.min(self.state.map.columns - 1);
+        }
+
+        if let Some(goal) = &mut self.state.goal {
+            goal.row = goal.row.min(self.state.map.rows - 1);
+            goal.col = goal.col.min(self.state.map.columns - 1);
+        }
+
+        // also need to reset the pathfinder
+        if let (Some(start), Some(goal)) = (self.state.start, self.state.goal) {
+            self.pathfinder = Some(PathFinder::new(
+                start,
+                goal,
+                self.state.map.create_storage::<Visited<usize, Point>>(),
+                (),
+            ));
         }
     }
 }
@@ -275,9 +318,20 @@ impl eframe::App for App {
 
             ui.checkbox(&mut self.state.is_editing, "Edit Mode");
             if self.state.is_editing {
-                ui.label("Drop file to select a background");
+                ui.separator();
+                ui.label("Step 1: Select Background");
                 preview_files_being_dropped(ctx);
-                if let Some(image) = ctx.input(|i| {
+
+                let file_name = if let Some(b) = &self.background {
+                    &b.file_name
+                } else {
+                    "None"
+                };
+
+                ui.label(format!("Selected: {file_name}"));
+
+                ui.label("Drop file to select another background");
+                if let Some((image, name)) = ctx.input(|i| {
                     let d = i.raw.dropped_files.first()?;
 
                     // handle the differences between web and native
@@ -285,20 +339,65 @@ impl eframe::App for App {
                         image::load_from_memory(data)
                             .inspect_err(|e| log::error!("Error loading image: {e}"))
                             .ok()
+                            .map(|i| (i, d.name.clone()))
                     } else if let Some(path) = &d.path {
                         image::open(path)
                             .inspect_err(|e| log::error!("Error loading image: {e}"))
                             .ok()
+                            .map(|i| (i, d.name.clone()))
                     } else {
                         None
                     }
                 }) {
-                    self.set_background_image(image);
+                    self.set_background_image(image, name);
+                }
+
+                ui.separator();
+                ui.label("Step 2: Decide Grid Size");
+
+                let mut changed = false;
+                if let Some(b) = &mut self.background {
+                    ui.horizontal(|ui| {
+                        ui.label("Pixels per cell: ");
+                        ui.add(
+                            egui::widgets::DragValue::new(
+                                &mut self.state.edit_state.pixels_per_cell,
+                            )
+                            .range(1..=100),
+                        );
+                        if ui.button("Auto Scale").clicked() {
+                            let ppc = self.state.edit_state.pixels_per_cell as f32;
+                            let rows = b.image_data.height() as f32 / ppc;
+                            let cols = b.image_data.width() as f32 / ppc;
+                            self.state.map.resize(cols as usize, rows as usize);
+                            b.scale = 1.0 / ppc;
+                            changed = true;
+                        }
+                    });
+                }
+                if changed {
+                    self.on_map_change();
+                }
+
+                ui.separator();
+                ui.label("Step 3: Edit Cells");
+
+                let mut changed = false;
+                if let Some(b) = &mut self.background {
+                    if ui.button("Auto Fill Map").clicked() {
+                        // TODO
+                    }
+                }
+                if changed {
+                    self.on_map_change();
                 }
             }
 
             if ui.button("Load Preset").clicked() {
-                self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
+                self.set_background(
+                    include_bytes!("../../data/maze-03_6_threshold.png"),
+                    "maze".to_string(),
+                );
 
                 if let Some(background) = &self.background {
                     let mut map = parse_img(&background.image_data).unwrap();
@@ -324,7 +423,7 @@ impl eframe::App for App {
                     self.state.start = Some(start);
                     self.pathfinder = Some(finder);
 
-                    // self.on_map_change(context);
+                    self.on_map_change();
                 }
             }
             ui.checkbox(&mut self.state.draw_grid_lines, "Draw grid lines");
@@ -453,7 +552,7 @@ impl eframe::App for App {
 
                 // draw the selection rectangle
                 if self.state.is_editing {
-                    if let Some(selection) = &self.state.edit_selection {
+                    if let Some(selection) = &self.state.edit_state.edit_selection {
                         let color = Color::rgba_u8(0, 255, 0, 128);
                         let Selection { start, end } = selection;
                         world.sr.rect(
@@ -625,17 +724,17 @@ impl eframe::App for App {
                     } else if !modifiers.shift {
                         if mouse_pressed {
                             // initialize region selection
-                            self.state.selection_start = Some(point);
-                            self.state.selection_end = Some(point);
-                            self.state.edit_selection = Some(Selection {
+                            self.state.edit_state.selection_start = Some(point);
+                            self.state.edit_state.selection_end = Some(point);
+                            self.state.edit_state.edit_selection = Some(Selection {
                                 start: point,
                                 end: point,
                             });
                         } else if mouse_released {
-                            self.state.selection_start = None;
-                            self.state.selection_end = None;
+                            self.state.edit_state.selection_start = None;
+                            self.state.edit_state.selection_end = None;
 
-                            if let Some(selection) = &self.state.edit_selection {
+                            if let Some(selection) = &self.state.edit_state.edit_selection {
                                 // TODO: load values from the selection here into the editor
                                 let cell =
                                     self.state.map.cells[selection.start.row][selection.start.col];
@@ -643,8 +742,8 @@ impl eframe::App for App {
                             }
                         } else if mouse_down {
                             // update region selection
-                            if let Some(start) = self.state.selection_start {
-                                self.state.selection_end = Some(point);
+                            if let Some(start) = self.state.edit_state.selection_start {
+                                self.state.edit_state.selection_end = Some(point);
                                 let (start, end) = (
                                     Point {
                                         row: start.row.min(point.row),
@@ -656,7 +755,8 @@ impl eframe::App for App {
                                     },
                                 );
 
-                                self.state.edit_selection = Some(Selection { start, end });
+                                self.state.edit_state.edit_selection =
+                                    Some(Selection { start, end });
                             }
                         }
                     }
