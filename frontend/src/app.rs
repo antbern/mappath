@@ -404,7 +404,7 @@ impl eframe::App for App {
 
                             let (width, height) = background.image_data.dimensions();
                             if x < width && y < height {
-                                let color = background.image_data.get_pixel(x, y);
+                                let color = background.image_data.get_pixel(x, height - y - 1);
                                 log::info!("Selected color: {:?}", color);
 
                                 // generate a map based on the selected color
@@ -471,6 +471,19 @@ impl eframe::App for App {
                 egui::widgets::Slider::new(&mut self.state.foreground_alpha, 0.0..=1.0)
                     .text("Foreground Alpha"),
             );
+
+            // Another option to select the opacity with a single slider only!
+            let mut value = self.state.foreground_alpha;
+            if ui
+                .add(
+                    egui::widgets::Slider::new(&mut value, 0.0..=1.0)
+                        .text("Background <-> Foreground"),
+                )
+                .changed()
+            {
+                self.state.foreground_alpha = value;
+                self.state.background_alpha = 1.0 - value;
+            }
 
             if let Some(pathfinder) = &mut self.pathfinder {
                 ui.label("Pathfinder");
