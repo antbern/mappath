@@ -333,7 +333,7 @@ impl PrimitiveRendererTexture {
             *self.vertices.get_unchecked_mut(self.index + 5) = texture_y;
         }
 
-        self.index += 4+2; // 3 position + 1 u32 for color + 2 for texture coord
+        self.index += 4 + 2; // 3 position + 1 u32 for color + 2 for texture coord
         self.vertex_count += 1;
     }
 }

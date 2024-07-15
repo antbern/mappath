@@ -1,3 +1,4 @@
+use eframe::egui;
 use std::{sync::Arc, time::Duration};
 
 use eframe::{egui_glow, glow};
