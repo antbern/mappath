@@ -17,6 +17,8 @@ use optimize::{
     util::parse_img,
 };
 
+type Reference = <GridMap<usize> as MapTrait>::Reference;
+
 pub struct App {
     /// Behind an `Arc<Mutex<…>>` so we can pass it to [`egui::PaintCallback`] and paint later.
     world_renderer: Arc<Mutex<WorldRenderer>>,
@@ -56,6 +58,18 @@ struct State {
     start: Option<Point>,
     goal: Option<Point>,
     auto_step: bool,
+
+    edit_selection: Option<Selection<Reference>>,
+
+    // stuff for selecting rectangles
+    selection_start: Option<Reference>,
+    selection_end: Option<Reference>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Selection<R> {
+    start: R,
+    end: R,
 }
 
 impl Default for State {
@@ -70,6 +84,9 @@ impl Default for State {
             start: None,
             goal: None,
             auto_step: true,
+            edit_selection: None,
+            selection_start: None,
+            selection_end: None,
         }
     }
 }
@@ -203,6 +220,8 @@ impl eframe::App for App {
             let mouse_pos = self.world_renderer.lock().last_mouse_pos;
             ui.label(format!("Mouse: [{:.2}, {:.2}]", mouse_pos.x, mouse_pos.y));
 
+            ui.checkbox(&mut self.state.is_editing, "Edit Mode");
+
             if ui.button("Load Preset").clicked() {
                 self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
 
@@ -228,7 +247,6 @@ impl eframe::App for App {
                     self.state.map = map;
                     self.state.goal = Some(goal);
                     self.state.start = Some(start);
-
                     self.pathfinder = Some(finder);
 
                     // self.on_map_change(context);
@@ -352,6 +370,21 @@ impl eframe::App for App {
                     world
                         .sr
                         .rect(start.col as f32, start.row as f32, 1.0, 1.0, Color::GREEN);
+                }
+
+                // draw the selection rectangle
+                if self.state.is_editing {
+                    if let Some(selection) = &self.state.edit_selection {
+                        let color = Color::rgba_u8(0, 255, 0, 128);
+                        let Selection { start, end } = selection;
+                        world.sr.rect(
+                            start.col as f32,
+                            start.row as f32,
+                            end.col as f32 - start.col as f32 + 1.0,
+                            end.row as f32 - start.row as f32 + 1.0,
+                            color,
+                        );
+                    }
                 }
 
                 world.sr.end();
@@ -488,19 +521,65 @@ impl eframe::App for App {
                 }
 
                 // do logic based on mouse input
-                let mouse_clicked = ui.input(|r| r.pointer.primary_clicked());
+                let (mouse_clicked, mouse_pressed, mouse_down, mouse_released) = ui.input(|r| {
+                    (
+                        r.pointer.primary_clicked(),
+                        r.pointer.primary_pressed(),
+                        r.pointer.primary_down(),
+                        r.pointer.primary_released(),
+                    )
+                });
                 let modifiers = ui.input(|r| r.modifiers);
 
                 let mut start_goal_changed = false;
                 if let Some(point) =
                     self.mouse_world_to_point_valid(world.last_mouse_pos.x, world.last_mouse_pos.y)
                 {
-                    if mouse_clicked && !modifiers.shift {
-                        self.state.start = Some(point);
-                        start_goal_changed = true;
-                    } else if mouse_clicked && modifiers.shift {
-                        self.state.goal = Some(point);
-                        start_goal_changed = true;
+                    if !self.state.is_editing {
+                        if mouse_clicked && !modifiers.shift {
+                            self.state.start = Some(point);
+                            start_goal_changed = true;
+                        } else if mouse_clicked && modifiers.shift {
+                            self.state.goal = Some(point);
+                            start_goal_changed = true;
+                        }
+                    } else if !modifiers.shift {
+                        if mouse_pressed {
+                            // initialize region selection
+                            self.state.selection_start = Some(point);
+                            self.state.selection_end = Some(point);
+                            self.state.edit_selection = Some(Selection {
+                                start: point,
+                                end: point,
+                            });
+                        } else if mouse_released {
+                            self.state.selection_start = None;
+                            self.state.selection_end = None;
+
+                            if let Some(selection) = &self.state.edit_selection {
+                                // TODO: load values from the selection here into the editor
+                                let cell =
+                                    self.state.map.cells[selection.start.row][selection.start.col];
+                                log::debug!("Selected region first cell: {:#?}", cell);
+                            }
+                        } else if mouse_down {
+                            // update region selection
+                            if let Some(start) = self.state.selection_start {
+                                self.state.selection_end = Some(point);
+                                let (start, end) = (
+                                    Point {
+                                        row: start.row.min(point.row),
+                                        col: start.col.min(point.col),
+                                    },
+                                    Point {
+                                        row: start.row.max(point.row),
+                                        col: start.col.max(point.col),
+                                    },
+                                );
+
+                                self.state.edit_selection = Some(Selection { start, end });
+                            }
+                        }
                     }
                 }
 
@@ -575,6 +654,10 @@ impl App {
 
         let mut drag_delta = response.drag_delta();
         drag_delta.y *= -1.0;
+
+        if self.state.is_editing && !ui.input(|i| i.modifiers.shift) {
+            drag_delta = Vec2::ZERO;
+        }
 
         let size = rect.size();
 
