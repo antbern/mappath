@@ -148,6 +148,14 @@ impl App {
             scale: 2.0,
         });
     }
+    fn set_background_image(&mut self, image: DynamicImage) {
+        self.world_renderer.lock().texture = Texture::New(image.clone());
+
+        self.background = Some(Background {
+            image_data: image,
+            scale: 2.0,
+        });
+    }
 
     fn draw_neighbors(&self, point: &Point, sr: &mut ShapeRenderer, color: Color) {
         if !self.state.map.is_valid(*point) {
@@ -195,6 +203,39 @@ impl App {
         }
     }
 }
+fn preview_files_being_dropped(ctx: &egui::Context) {
+    use egui::*;
+    use std::fmt::Write as _;
+
+    if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
+        let text = ctx.input(|i| {
+            let mut text = "Dropping files:\n".to_owned();
+            for file in &i.raw.hovered_files {
+                if let Some(path) = &file.path {
+                    write!(text, "\n{}", path.display()).ok();
+                } else if !file.mime.is_empty() {
+                    write!(text, "\n{}", file.mime).ok();
+                } else {
+                    text += "\n???";
+                }
+            }
+            text
+        });
+
+        let painter =
+            ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
+
+        let screen_rect = ctx.screen_rect();
+        painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
+        painter.text(
+            screen_rect.center(),
+            Align2::CENTER_CENTER,
+            text,
+            TextStyle::Heading.resolve(&ctx.style()),
+            Color32::WHITE,
+        );
+    }
+}
 
 impl eframe::App for App {
     /// Called by the frame work to save state before shutdown.
@@ -233,6 +274,28 @@ impl eframe::App for App {
             ui.label(format!("Mouse: [{:.2}, {:.2}]", mouse_pos.x, mouse_pos.y));
 
             ui.checkbox(&mut self.state.is_editing, "Edit Mode");
+            if self.state.is_editing {
+                ui.label("Drop file to select a background");
+                preview_files_being_dropped(ctx);
+                if let Some(image) = ctx.input(|i| {
+                    let d = i.raw.dropped_files.first()?;
+
+                    // handle the differences between web and native
+                    if let Some(data) = &d.bytes {
+                        image::load_from_memory(data)
+                            .inspect_err(|e| log::error!("Error loading image: {e}"))
+                            .ok()
+                    } else if let Some(path) = &d.path {
+                        image::open(path)
+                            .inspect_err(|e| log::error!("Error loading image: {e}"))
+                            .ok()
+                    } else {
+                        None
+                    }
+                }) {
+                    self.set_background_image(image);
+                }
+            }
 
             if ui.button("Load Preset").clicked() {
                 self.set_background(include_bytes!("../../data/maze-03_6_threshold.png"));
@@ -338,17 +401,17 @@ impl eframe::App for App {
                         x,
                         y
                     );
-
-                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 0.0);
-                    world.pr_texture.xyzc(x + width, y, 0.0, color, 1.0, 0.0);
+                    // add the vertices for the image quad, and flip the y axis so that the image is correctly drawn
+                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 1.0);
+                    world.pr_texture.xyzc(x + width, y, 0.0, color, 1.0, 1.0);
                     world
                         .pr_texture
-                        .xyzc(x + width, y + height, 0.0, color, 1.0, 1.0);
+                        .xyzc(x + width, y + height, 0.0, color, 1.0, 0.0);
                     world
                         .pr_texture
-                        .xyzc(x + width, y + height, 0.0, color, 1.0, 1.0);
-                    world.pr_texture.xyzc(x, y + height, 0.0, color, 0.0, 1.0);
-                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 0.0);
+                        .xyzc(x + width, y + height, 0.0, color, 1.0, 0.0);
+                    world.pr_texture.xyzc(x, y + height, 0.0, color, 0.0, 0.0);
+                    world.pr_texture.xyzc(x, y, 0.0, color, 0.0, 1.0);
 
                     world.pr_texture.end();
                 }
