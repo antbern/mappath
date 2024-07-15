@@ -732,6 +732,11 @@ impl WorldRenderer {
         self.sr.set_mvp(mvp);
         self.pr_texture.set_mvp(mvp);
 
+        // enable blending for transparency
+        unsafe {
+            use eframe::glow::HasContext as _;
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        }
         // unproject mouse position to
         if let Some(pos) = pos {
             self.last_mouse_pos = self.camera.unproject(pos);

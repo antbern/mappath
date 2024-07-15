@@ -133,7 +133,7 @@ impl PrimitiveRenderer {
                 // output the final vertex position
                 gl_Position = u_projModelView * position;
                     
-                v_Color = vec4(color.xyz, 1.0);
+                v_Color = color;
             }
         "#,
             r#"
