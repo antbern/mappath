@@ -26,6 +26,10 @@ impl ShapeRenderer {
         self.pr.set_mvp(mvp);
     }
 
+    pub fn set_global_alpha(&mut self, alpha: f32) {
+        self.pr.set_global_alpha(alpha);
+    }
+
     pub fn begin(&mut self, pt: PrimitiveType) {
         self.current_shape_type = Some(pt);
         self.pr.begin(pt);

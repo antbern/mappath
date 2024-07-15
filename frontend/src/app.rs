@@ -66,6 +66,7 @@ struct State {
     last_camera_position: Option<(nalgebra::Vector2<f32>, f32)>,
 
     background_alpha: f32,
+    foreground_alpha: f32,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -106,6 +107,7 @@ impl Default for State {
             },
             last_camera_position: None,
             background_alpha: 1.0,
+            foreground_alpha: 1.0,
         }
     }
 }
@@ -464,6 +466,10 @@ impl eframe::App for App {
             ui.add(
                 egui::widgets::Slider::new(&mut self.state.background_alpha, 0.0..=1.0)
                     .text("Background Alpha"),
+            );
+            ui.add(
+                egui::widgets::Slider::new(&mut self.state.foreground_alpha, 0.0..=1.0)
+                    .text("Foreground Alpha"),
             );
 
             if let Some(pathfinder) = &mut self.pathfinder {
@@ -894,15 +900,21 @@ impl App {
 
         let size = rect.size();
 
+        let global_alpha = self.state.foreground_alpha;
         // Clone locals so we can move them into the paint callback:
         let world_renderer = self.world_renderer.clone();
 
         let callback = egui::PaintCallback {
             rect,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                world_renderer
-                    .lock()
-                    .paint(painter.gl(), pos, size, drag_delta, zoom_factor);
+                world_renderer.lock().paint(
+                    painter.gl(),
+                    pos,
+                    size,
+                    drag_delta,
+                    zoom_factor,
+                    global_alpha,
+                );
             })),
         };
         ui.painter().add(callback);
@@ -953,6 +965,7 @@ impl WorldRenderer {
         size: Vec2,
         pan: Vec2,
         zoom_factor: f32,
+        global_alpha: f32,
     ) {
         // first update the camera with any zoom and resize change
         self.camera.resize(size);
@@ -964,6 +977,8 @@ impl WorldRenderer {
         let mvp = self.camera.get_mvp();
         self.sr.set_mvp(mvp);
         self.pr_texture.set_mvp(mvp);
+
+        self.sr.set_global_alpha(global_alpha);
 
         // enable blending for transparency
         unsafe {

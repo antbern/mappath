@@ -15,6 +15,7 @@ pub struct PrimitiveRenderer {
     vertex_buffer: gl::VertexBuffer,
 
     proj_model_view: nalgebra::Matrix4<f32>,
+    global_alpha: f32,
     vertices: Vec<f32>,
     max_vertices: usize,
     vertex_count: usize,
@@ -127,13 +128,14 @@ impl PrimitiveRenderer {
             layout(location = 1) in vec4 color;
             
             uniform mat4 u_projModelView;
+            uniform float u_globalAlpha;
             
             out vec4 v_Color;
             void main(){
                 // output the final vertex position
                 gl_Position = u_projModelView * position;
                     
-                v_Color = color;
+                v_Color = vec4(color.xyz, color.w * u_globalAlpha);
             }
         "#,
             r#"
@@ -171,6 +173,7 @@ impl PrimitiveRenderer {
             vertices,
             max_vertices: max_vertices as usize,
             proj_model_view: nalgebra::Matrix4::identity(),
+            global_alpha: 1.0,
             vertex_count: 0,
             index: 0,
             active_drawcall: None,
@@ -180,6 +183,9 @@ impl PrimitiveRenderer {
 
     pub fn set_mvp(&mut self, mvp: &nalgebra::Matrix4<f32>) {
         self.proj_model_view.copy_from(mvp);
+    }
+    pub fn set_global_alpha(&mut self, alpha: f32) {
+        self.global_alpha = alpha;
     }
 
     pub fn begin(&mut self, primitive_type: PrimitiveType) {
@@ -245,6 +251,8 @@ impl PrimitiveRenderer {
         self.program.bind(gl);
         self.program
             .set_uniform_matrix_4_f32(gl, "u_projModelView", self.proj_model_view);
+        self.program
+            .set_uniform_1_f32(gl, "u_globalAlpha", self.global_alpha);
 
         // upload all our data
         self.vertex_buffer.bind(gl);

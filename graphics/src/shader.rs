@@ -78,7 +78,12 @@ impl Program {
             );
         }
     }
-
+    pub fn set_uniform_1_f32(&self, gl: &glow::Context, name: &str, value: f32) {
+        use glow::HasContext as _;
+        unsafe {
+            gl.uniform_1_f32(gl.get_uniform_location(self.program, name).as_ref(), value);
+        }
+    }
     pub fn destroy(&self, gl: &glow::Context) {
         use glow::HasContext as _;
         unsafe {
